@@ -88,7 +88,7 @@ pub fn issue<R: RngCore>(
             RdfValue::ObjectRef(ObjectId::NamedNode(
                 "https://www.w3.org/2018/credentials#VerifiableCredential".into(),
             )),
-            RdfValue::ObjectRef(ObjectId::NamedNode(t.into())),
+            RdfValue::String(t.into()),
         ])
     } else {
         RdfValue::ObjectRef(ObjectId::NamedNode(
