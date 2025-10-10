@@ -51,6 +51,7 @@ pub async fn issue(
         params.created_date.as_deref(),
         params.expiration_date.as_deref(),
         params.device_binding,
+        params.vc_type.as_deref(),
     )
     .await?;
 

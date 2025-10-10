@@ -50,6 +50,9 @@ pub struct IssuanceParams {
     /// BASE64 encoded x,y coordinates (big endian bytes) of
     /// the device binding public key, on the P256 curve.
     pub device_binding: Option<(String, String)>,
+
+    /// Optional type of the verifiable credential.
+    pub vc_type: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

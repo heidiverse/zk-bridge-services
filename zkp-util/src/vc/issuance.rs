@@ -43,6 +43,7 @@ pub fn issue<R: RngCore>(
     created_date: Option<DateTime<Utc>>,
     expiration_date: Option<DateTime<Utc>>,
     device_binding: Option<(String, String)>,
+    vc_type: Option<&str>,
 ) -> anyhow::Result<VerifiableCredential> {
     let issuer = rdf_util::from_str_with_hint(
         format!(
@@ -76,12 +77,26 @@ pub fn issue<R: RngCore>(
 
     let mut data = rdf_util::from_str(format!(
         r#"
-        _:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://www.w3.org/2018/credentials#VerifiableCredential> .
         _:b0 <https://www.w3.org/2018/credentials#issuer> <{issuer_id}> .
         _:b0 <https://www.w3.org/2018/credentials#issuanceDate> "{issuance_date}"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
         _:b0 <https://www.w3.org/2018/credentials#expirationDate> "{expiration_date}"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
         "#,
     ))?;
+
+    let vc_type = if let Some(t) = vc_type {
+        RdfValue::Array(vec![
+            RdfValue::ObjectRef(ObjectId::NamedNode(
+                "https://www.w3.org/2018/credentials#VerifiableCredential".into(),
+            )),
+            RdfValue::ObjectRef(ObjectId::NamedNode(t.into())),
+        ])
+    } else {
+        RdfValue::ObjectRef(ObjectId::NamedNode(
+            "https://www.w3.org/2018/credentials#VerifiableCredential".into(),
+        ))
+    };
+    data["http://www.w3.org/1999/02/22-rdf-syntax-ns#type"] = vc_type;
+
     data["https://www.w3.org/2018/credentials#credentialSubject"] =
         RdfValue::Object(claims, claims_id);
 

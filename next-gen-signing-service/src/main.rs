@@ -342,7 +342,8 @@ mod test {
                     "issuance_date": "2020-01-01T00:00:00Z",
                     "created_date": "2025-01-01T00:00:00Z",
                     "expiration_date": "2030-01-01T00:00:00Z",
-                    "device_binding": [db_pk_x, db_pk_y]
+                    "device_binding": [db_pk_x, db_pk_y],
+                    "vc_type": "https://example.org/my-vc-type",
                 })
                 .to_string(),
             )

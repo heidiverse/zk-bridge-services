@@ -135,6 +135,7 @@ pub async fn issue<R: RngCore>(
     created_date: Option<&str>,
     expiration_date: Option<&str>,
     device_binding: Option<(String, String)>,
+    vc_type: Option<&str>,
 ) -> anyhow::Result<String> {
     let claims = parse_json_ld(&claims.to_string()).await?;
 
@@ -169,6 +170,7 @@ pub async fn issue<R: RngCore>(
         created_date,
         expiration_date,
         device_binding,
+        vc_type,
     )?;
 
     let credential = BASE64_URL_SAFE_NO_PAD.encode(
@@ -425,6 +427,7 @@ mod tests {
             None,
             None,
             device_binding,
+            Some("https://example.org/my-vc-type"),
         )
         .await
         .unwrap();

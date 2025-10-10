@@ -78,6 +78,7 @@ fn selective_disclosure() {
         Some(DateTime::from_str("2025-01-01T00:00:00Z").unwrap()),
         Some(DateTime::from_str("2030-01-01T00:00:00Z").unwrap()),
         None,
+        Some("https://example.org/my-vc-type"),
     )
     .unwrap();
 
