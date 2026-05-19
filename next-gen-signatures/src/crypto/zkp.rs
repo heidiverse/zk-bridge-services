@@ -17,9 +17,9 @@ use serde_json::{json, Value as JsonValue};
 use static_iref::iri;
 pub use zkp_util::vc::requirements::{DiscloseRequirement, ProofRequirement};
 use zkp_util::{
-    device_binding::{DeviceBindingPresentation, SecpAffine, SecpFq, SecpFr},
+    device_binding::{DeviceBindingPresentationSigma, SecpAffine, SecpFq, SecpFr},
     vc::{
-        presentation::VerifiablePresentation,
+        presentation::VerifiablePresentationSigma,
         requirements::{DeviceBindingRequirement, DeviceBindingVerificationParams},
         VerifiableCredential,
     },
@@ -333,14 +333,14 @@ pub fn verify<R: RngCore>(
         let device_binding = if let Some(db) = json.get("device_binding") {
             let bytes = BASE64_URL_SAFE_NO_PAD
                 .decode(db.as_str().context("Invalid device_binding found!")?)?;
-            Some(DeviceBindingPresentation::deserialize_compressed(
+            Some(DeviceBindingPresentationSigma::deserialize_compressed(
                 Cursor::new(bytes),
             )?)
         } else {
             None
         };
 
-        VerifiablePresentation {
+        VerifiablePresentationSigma {
             proof,
             device_binding,
         }

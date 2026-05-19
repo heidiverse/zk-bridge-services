@@ -29,5 +29,7 @@ proof_system = "0.32.0"
 rand_core = { workspace = true }
 rdf-proofs = { git = "https://github.com/UbiqueInnovation/rdf-proofs", branch = "main" }
 rdf-util = { path = "../rdf-util" }
-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+ecdsa_pops = { path = "/Users/patrickamrein/Documents/Ubique/git/ecdsapop_t256ipa/ecdsa_pops" }
+rok = { path = "/Users/patrickamrein/Documents/Ubique/git/ecdsapop_t256ipa/rok" }

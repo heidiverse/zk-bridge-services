@@ -18,9 +18,12 @@ specific language governing permissions and limitations
 under the License.
  */
 
+use std::io::{BufReader, BufWriter, Cursor, Read, Seek, Write};
+
 use anyhow::{anyhow, Context};
 use ark_bls12_381::G1Affine as BlsG1Affine;
 use ark_ec::AffineRepr;
+use ark_ff::{BigInteger, PrimeField as ArkPrimeField};
 use ark_secp256r1::Fq;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
@@ -30,6 +33,20 @@ use dock_crypto_utils::commitment::PedersenCommitmentKey;
 use dock_crypto_utils::{
     randomized_mult_checker::RandomizedMultChecker,
     transcript::{new_merlin_transcript, Transcript},
+};
+use ecdsa_pops::halo2curves::ff::derive::byteorder::{
+    self, BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt,
+};
+use ecdsa_pops::halo2curves::secp256r1::Secp256r1Affine;
+use ecdsa_pops::halo2curves::serde::SerdeObject;
+use ecdsa_pops::halo2curves::CurveAffine;
+use ecdsa_pops::utils::ecdsa::{ECDSASignature, ECDSA};
+use ecdsa_pops::utils::{
+    arkfp_to_fp, arkfq_to_fq, arkp256_to_p256, fp_to_scalars, p256_to_arkp256,
+};
+use ecdsa_pops::{
+    bincode, halo2curves, G1Affine, PoPNativeComposedRoK, PoPNativeNizk, RelECDSA, RelECDSAParams,
+    RelECDSAStatement, RelECDSAWitness,
 };
 use equality_across_groups::{
     ec::commitments::{
@@ -42,8 +59,12 @@ use equality_across_groups::{
 use equality_across_groups::{
     eq_across_groups::ProofLargeWitness as ProofLargeWitnessOrig, tom256::Affine as Tom256Affine,
 };
+
+use ecdsa_pops::halo2curves::ff::{Field, PrimeField};
 use kvac::bbs_sharp::ecdsa;
-use rand_core::RngCore;
+use num_bigint::BigUint;
+use rand_core::{OsRng, RngCore};
+use rok::{Nizk, Relation, RoK};
 
 const WITNESS_BIT_SIZE: usize = 64;
 const CHALLENGE_BIT_SIZE: usize = 180;
@@ -76,7 +97,7 @@ type ProofLargeWitness = ProofLargeWitnessOrig<
 >;
 
 #[derive(Debug, Clone)]
-pub struct DeviceBinding {
+pub struct DeviceBindingSigma {
     pub proof: PoKEcdsaSigCommittedPublicKey,
     pub eq_x: ProofLargeWitness,
     pub eq_y: ProofLargeWitness,
@@ -91,8 +112,29 @@ pub struct DeviceBinding {
     pub bls_scalars_y: Vec<BlsFr>,
 }
 
+#[derive(Clone)]
+pub struct DeviceBindingNative {
+    pub proof: <PoPNativeComposedRoK as RoK>::Proof,
+    pub params: PoPNativeNizk,
+
+    pub bls_comm_pk_x1: ecdsa_pops::G1Affine,
+    pub bls_comm_pk_x2: ecdsa_pops::G1Affine,
+
+    pub bls_scalar_x1: ecdsa_pops::halo2curves::bls12381::Fr,
+    pub bls_scalar_x2: ecdsa_pops::halo2curves::bls12381::Fr,
+    pub bls_scalar_x1_blinding: ecdsa_pops::halo2curves::bls12381::Fr,
+    pub bls_scalar_x2_blinding: ecdsa_pops::halo2curves::bls12381::Fr,
+
+    pub K: Secp256r1Affine,
+}
+impl std::fmt::Debug for DeviceBindingNative {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DeviceBindingNative")
+    }
+}
+
 #[derive(Debug, Clone, CanonicalSerialize, CanonicalDeserialize)]
-pub struct DeviceBindingPresentation {
+pub struct DeviceBindingPresentationSigma {
     pub proof: PoKEcdsaSigCommittedPublicKey,
     pub eq_x: ProofLargeWitness,
     pub eq_y: ProofLargeWitness,
@@ -104,7 +146,219 @@ pub struct DeviceBindingPresentation {
     pub bls_comm_pk_y: BlsG1Affine,
 }
 
-impl DeviceBinding {
+pub struct DeviceBindingPresentationNative {
+    pub proof: <PoPNativeComposedRoK as RoK>::Proof,
+    pub params: PoPNativeNizk,
+    pub bls_comm_pk_x1: BlsG1Affine,
+    pub bls_comm_pk_x2: BlsG1Affine,
+    pub K: Secp256r1Affine,
+}
+
+impl DeviceBindingPresentationNative {
+    pub fn serialize(&self) -> Vec<u8> {
+        let p = bincode::serialize(&self.proof).unwrap();
+        let bytes = vec![];
+        let mut w = BufWriter::new(bytes);
+        w.write_u64::<byteorder::BigEndian>(p.len() as u64).unwrap();
+        w.write_all(&p).unwrap();
+        let p = bincode::serialize(&self.params).unwrap();
+        w.write_u64::<byteorder::BigEndian>(p.len() as u64).unwrap();
+        w.write_all(&p).unwrap();
+        let compressed_size = self.bls_comm_pk_x1.compressed_size();
+        w.write_u64::<byteorder::BigEndian>(compressed_size as u64)
+            .unwrap();
+        self.bls_comm_pk_x1.serialize_compressed(&mut w).unwrap();
+        let compressed_size = self.bls_comm_pk_x2.compressed_size();
+        w.write_u64::<byteorder::BigEndian>(compressed_size as u64)
+            .unwrap();
+        self.bls_comm_pk_x2.serialize_compressed(&mut w).unwrap();
+
+        let k_bytes = bincode::serialize(&self.K).unwrap();
+        w.write_u64::<byteorder::BigEndian>(k_bytes.len() as u64)
+            .unwrap();
+        w.write_all(&k_bytes).unwrap();
+        w.into_inner().unwrap()
+    }
+    pub fn deserialize<T: Read + Seek>(bytes: T) -> Self {
+        let mut reader = BufReader::new(bytes);
+        let len_proof = reader.read_u64::<BigEndian>().unwrap();
+        let mut proof_bytes = vec![0; len_proof as usize];
+        reader.read_exact(&mut proof_bytes).unwrap();
+        let len_params = reader.read_u64::<BigEndian>().unwrap();
+        let mut params_bytes = vec![0; len_params as usize];
+        reader.read_exact(&mut params_bytes).unwrap();
+
+        let len_x1 = reader.read_u64::<BigEndian>().unwrap();
+        let mut x1_bytes = vec![0; len_x1 as usize];
+        reader.read_exact(&mut x1_bytes).unwrap();
+
+        let len_x2 = reader.read_u64::<BigEndian>().unwrap();
+        let mut x2_bytes = vec![0; len_x2 as usize];
+        reader.read_exact(&mut x2_bytes).unwrap();
+        let x1 = BlsG1Affine::deserialize_compressed(&x1_bytes[..]).unwrap();
+
+        let x2 = BlsG1Affine::deserialize_compressed(&x2_bytes[..]).unwrap();
+
+        let len_K = reader.read_u64::<BigEndian>().unwrap();
+        let mut k_bytes = vec![0; len_K as usize];
+        reader.read_exact(&mut k_bytes).unwrap();
+        let K = bincode::deserialize(&k_bytes).unwrap();
+
+        Self {
+            proof: bincode::deserialize(&proof_bytes).unwrap(),
+            params: bincode::deserialize(&params_bytes).unwrap(),
+            bls_comm_pk_x1: x1,
+            bls_comm_pk_x2: x2,
+            K,
+        }
+    }
+
+    pub fn verify(&self, label: &'static [u8], message: SecpFr) -> anyhow::Result<()> {
+        let mut transcript_verifier = ecdsa_pops::merlin::Transcript::new(label);
+        let x = RelECDSAStatement::new(
+            [
+                from_arkg1_to_g1(&self.bls_comm_pk_x1),
+                from_arkg1_to_g1(&self.bls_comm_pk_x2),
+            ],
+            None,
+            arkfq_to_fq(&message),
+            self.K,
+        );
+        let ecdsa = ECDSA {
+            pp: Secp256r1Affine::generator(),
+        };
+        let nizk = self.params.clone();
+        let gs = [*nizk.ck_bls(), *nizk.ck_bls()];
+        let h = nizk.ck_bls_blinding();
+        let pp = RelECDSAParams::<G1Affine, 2>::new(gs, *h, ecdsa);
+        let r_verifier = RelECDSA::new(pp, x, None);
+        let _ = self
+            .params
+            .verify(&mut transcript_verifier, &r_verifier, &self.proof)
+            .unwrap();
+        Ok(())
+    }
+}
+
+pub fn from_ark_point_to_halo_point(p: &SecpAffine) -> Secp256r1Affine {
+    arkp256_to_p256(p)
+}
+
+use ark_bls12_381::Fq as BlsFq;
+
+pub fn from_g1_to_arkg1(g: &ecdsa_pops::G1Affine) -> BlsG1Affine {
+    let x_rep = g.x.to_repr();
+    let y_rep = g.y.to_repr();
+    let x = x_rep.as_ref();
+    let y = y_rep.as_ref();
+    let x = <BlsFq as ArkPrimeField>::from_le_bytes_mod_order(&x);
+    let y = <BlsFq as ArkPrimeField>::from_le_bytes_mod_order(&y);
+    BlsG1Affine::new(x, y)
+}
+pub fn from_arkg1_to_g1(g: &BlsG1Affine) -> ecdsa_pops::G1Affine {
+    let x: BigUint = g.x.clone().into();
+    let y: BigUint = g.y.clone().into();
+    let xbs = x.to_bytes_le();
+    let ybs = y.to_bytes_le();
+    let mut xbytes = [0u8; 48];
+    let mut ybytes = [0u8; 48];
+    xbytes[..xbs.len()].copy_from_slice(&xbs);
+    ybytes[..ybs.len()].copy_from_slice(&ybs);
+
+    ecdsa_pops::G1Affine {
+        x: ecdsa_pops::halo2curves::bls12381::Fq::from_repr(xbytes.into()).unwrap(),
+        y: ecdsa_pops::halo2curves::bls12381::Fq::from_repr(ybytes.into()).unwrap(),
+    }
+}
+pub fn from_blsfr_to_arkblsfr(a: &ecdsa_pops::halo2curves::bls12381::Fr) -> BlsFr {
+    let a = a.to_repr();
+    let aref = a.as_ref();
+    <BlsFr as ArkPrimeField>::from_le_bytes_mod_order(aref)
+}
+
+impl DeviceBindingNative {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        public_key: SecpAffine,
+        message: SecpFr,
+        message_signature: ecdsa::Signature,
+        label: &str,
+    ) -> anyhow::Result<Self> {
+        let nizk = PoPNativeNizk::new(label);
+        let ecdsa = ECDSA {
+            pp: Secp256r1Affine::generator(),
+        };
+        let gs = [*nizk.ck_bls(), *nizk.ck_bls()];
+        let h = nizk.ck_bls_blinding();
+        let pp = RelECDSAParams::<G1Affine, 2>::new(gs, *h, ecdsa);
+
+        let pk = arkp256_to_p256(&public_key);
+        println!("successfully converted point");
+
+        let m = arkfq_to_fq(&message);
+        let sigma = ECDSASignature {
+            Rx: arkfq_to_fq(&message_signature.rand_x_coord),
+            response: arkfq_to_fq(&message_signature.response),
+        };
+
+        let sigma_converted = ecdsa.convert(&pk, &m, &sigma);
+        // sample randomness for the commitments
+        let rho: [ecdsa_pops::halo2curves::bls12381::Fr; 2] = (0..2)
+            .map(|_| <ecdsa_pops::halo2curves::bls12381::Fr>::random(OsRng))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        println!("everything ready start proofs");
+        // create witness
+        let w = RelECDSAWitness::new(pk, sigma_converted.z, rho, None);
+        println!("witness ready");
+        // create the commitment to the public key
+        let coms = (0..2)
+            .map(|i| {
+                RelECDSA::<G1Affine, 2>::create_commitment(&pp, &w, i)
+                    .unwrap()
+                    .0
+            })
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        println!("commitments done");
+        let x = RelECDSAStatement::new(coms, None, m, sigma_converted.K);
+
+        let limbs = fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&w.Q.x).unwrap();
+
+        let r_prover = RelECDSA::new(pp, x, Some(w));
+
+        let mut transcript_prover = ecdsa_pops::merlin::Transcript::new(b"pop native proof");
+        println!("start proof");
+        let proof = nizk
+            .prove(&mut transcript_prover, &r_prover, &mut OsRng)
+            .unwrap();
+        println!("proof finished");
+        Ok(Self {
+            proof: proof,
+            params: nizk,
+            bls_comm_pk_x1: coms[0],
+            bls_comm_pk_x2: coms[1],
+            bls_scalar_x1: limbs[0],
+            bls_scalar_x2: limbs[1],
+            bls_scalar_x1_blinding: rho[0],
+            bls_scalar_x2_blinding: rho[1],
+            K: sigma_converted.K,
+        })
+    }
+    pub fn present(&self) -> DeviceBindingPresentationNative {
+        DeviceBindingPresentationNative {
+            proof: self.proof.clone(),
+            params: self.params.clone(),
+            bls_comm_pk_x1: from_g1_to_arkg1(&self.bls_comm_pk_x1),
+            bls_comm_pk_x2: from_g1_to_arkg1(&self.bls_comm_pk_x2),
+            K: self.K.clone(),
+        }
+    }
+}
+
+impl DeviceBindingSigma {
     #[allow(clippy::too_many_arguments)]
     pub fn new<R: RngCore>(
         rng: &mut R,
@@ -231,8 +485,8 @@ impl DeviceBinding {
         })
     }
 
-    pub fn present(self) -> DeviceBindingPresentation {
-        DeviceBindingPresentation {
+    pub fn present(self) -> DeviceBindingPresentationSigma {
+        DeviceBindingPresentationSigma {
             proof: self.proof,
             eq_x: self.eq_x,
             eq_y: self.eq_y,
@@ -244,7 +498,7 @@ impl DeviceBinding {
     }
 }
 
-impl DeviceBindingPresentation {
+impl DeviceBindingPresentationSigma {
     #[allow(clippy::too_many_arguments)]
     pub fn verify<R: RngCore>(
         &self,
@@ -346,7 +600,7 @@ pub fn test_device_binding() {
     let message = SecpFr::rand(&mut rng);
     let message_signature = ecdsa::Signature::new_prehashed(&mut rng, message, secret_key);
 
-    let db = DeviceBinding::new(
+    let db = DeviceBindingSigma::new(
         &mut rng,
         public_key,
         message,
@@ -368,7 +622,7 @@ pub fn test_device_binding() {
     println!("{}", bytes.len());
 
     let presentation =
-        DeviceBindingPresentation::deserialize_compressed(Cursor::new(bytes)).unwrap();
+        DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(bytes)).unwrap();
 
     presentation
         .verify(
@@ -382,4 +636,66 @@ pub fn test_device_binding() {
             b"challenge",
         )
         .unwrap();
+}
+
+#[test]
+pub fn test_device_binding_native() {
+    use ark_ec::CurveGroup;
+    use ark_secp256r1::{G_GENERATOR_X, G_GENERATOR_Y};
+
+    const SECP_GEN: SecpAffine = SecpAffine::new_unchecked(G_GENERATOR_X, G_GENERATOR_Y);
+
+    let mut rng = rand_core::OsRng;
+
+    let secret_key = SecpFr::rand(&mut rng);
+    let public_key = (SECP_GEN * secret_key).into_affine();
+
+    let message = SecpFr::rand(&mut rng);
+    let message_signature = ecdsa::Signature::new_prehashed(&mut rng, message, secret_key);
+
+    let db =
+        DeviceBindingNative::new(public_key, message, message_signature, "comm-key-secp").unwrap();
+
+    let presentation = db.present();
+
+    let bytes = presentation.serialize();
+    println!("{}", bytes.len());
+    let proof = DeviceBindingPresentationNative::deserialize(Cursor::new(bytes));
+    let mut transcript_verifier = ecdsa_pops::merlin::Transcript::new(b"pop native proof");
+    let x = RelECDSAStatement::new(
+        [
+            from_arkg1_to_g1(&proof.bls_comm_pk_x1),
+            from_arkg1_to_g1(&proof.bls_comm_pk_x2),
+        ],
+        None,
+        arkfq_to_fq(&message),
+        proof.K,
+    );
+    let ecdsa = ECDSA {
+        pp: Secp256r1Affine::generator(),
+    };
+    let nizk = proof.params.clone();
+    let gs = [*nizk.ck_bls(), *nizk.ck_bls()];
+    let h = nizk.ck_bls_blinding();
+    let pp = RelECDSAParams::<G1Affine, 2>::new(gs, *h, ecdsa);
+    let r_verifier = RelECDSA::new(pp, x, None);
+    let _ = proof
+        .params
+        .verify(&mut transcript_verifier, &r_verifier, &proof.proof)
+        .unwrap();
+    // let presentation =
+    //     DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(bytes)).unwrap();
+
+    // presentation
+    //     .verify(
+    //         &mut rng,
+    //         message,
+    //         b"comm-key-secp",
+    //         b"comm-key-tom",
+    //         b"comm-key-bls",
+    //         b"bpp-setup",
+    //         b"transcript",
+    //         b"challenge",
+    //     )
+    //     .unwrap();
 }
