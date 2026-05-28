@@ -115,7 +115,6 @@ pub struct DeviceBindingSigma {
     pub bls_scalars_y: Vec<BlsFr>,
 }
 
-#[derive(Clone)]
 pub struct DeviceBindingNative {
     pub proof: <PoPNativeComposedRoK as RoK>::Proof,
     pub params: PoPNativeNizk,
@@ -221,7 +220,7 @@ impl DeviceBindingPresentationNative {
                 from_arkg1_to_g1(&self.bls_comm_pk_x2),
             ],
             None,
-            arkfq_to_fq(&message),
+            arkfq_to_fq(&message).unwrap(),
             self.K,
         );
         let ecdsa = ECDSA {
@@ -241,7 +240,7 @@ impl DeviceBindingPresentationNative {
 }
 
 pub fn from_ark_point_to_halo_point(p: &SecpAffine) -> Secp256r1Affine {
-    arkp256_to_p256(p)
+    arkp256_to_p256(p).unwrap()
 }
 
 use ark_bls12_381::Fq as BlsFq;
@@ -301,13 +300,13 @@ impl DeviceBindingNative {
 
         let pp = RelECDSAParams::<G1Affine, 2>::new(gs, *h, ecdsa);
 
-        let pk = arkp256_to_p256(&public_key);
+        let pk = arkp256_to_p256(&public_key).unwrap();
         println!("successfully converted point");
 
-        let m = arkfq_to_fq(&message);
+        let m = arkfq_to_fq(&message).unwrap();
         let sigma = ECDSASignature {
-            Rx: arkfq_to_fq(&message_signature.rand_x_coord),
-            response: arkfq_to_fq(&message_signature.response),
+            Rx: arkfq_to_fq(&message_signature.rand_x_coord).unwrap(),
+            response: arkfq_to_fq(&message_signature.response).unwrap(),
         };
 
         let start = Instant::now();
@@ -336,7 +335,7 @@ impl DeviceBindingNative {
         println!("commitments done");
         let x = RelECDSAStatement::new(coms, None, m, sigma_converted.K);
 
-        let limbs = fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&w.Q.x).unwrap();
+        let limbs = fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&w.q().x).unwrap();
 
         let r_prover = RelECDSA::new(pp, x, Some(w));
         println!("elapsed [setup]: {}", (end - start).as_millis());
@@ -600,7 +599,7 @@ pub fn limbs_from_public_key(x: &str) -> (String, String) {
     use base64::prelude::BASE64_STANDARD;
     let x = BASE64_STANDARD.decode(x).unwrap();
     let x = SecpFq::from(BigUint::from_bytes_be(&x));
-    let limbs = fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&arkfp_to_fp(&x)).unwrap();
+    let limbs = fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&arkfp_to_fp(&x).unwrap()).unwrap();
     let x: BlsFr = from_blsfr_to_arkblsfr(&limbs[0]);
     let y: BlsFr = from_blsfr_to_arkblsfr(&limbs[1]);
 
@@ -704,19 +703,18 @@ pub fn test_device_binding_native() {
             from_arkg1_to_g1(&proof.bls_comm_pk_x2),
         ],
         None,
-        arkfq_to_fq(&message),
+        arkfq_to_fq(&message).unwrap(),
         proof.K,
     );
     let ecdsa = ECDSA {
         pp: Secp256r1Affine::generator(),
     };
-    let nizk = proof.params.clone();
+    let nizk = proof.params;
     let gs = [*nizk.ck_bls(), *nizk.ck_bls()];
     let h = nizk.ck_bls_blinding();
     let pp = RelECDSAParams::<G1Affine, 2>::new(gs, *h, ecdsa);
     let r_verifier = RelECDSA::new(pp, x, None);
-    let _ = proof
-        .params
+    let _ = nizk
         .verify(&mut transcript_verifier, &r_verifier, &proof.proof)
         .unwrap();
     let presentation =
