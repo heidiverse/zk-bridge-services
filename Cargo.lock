@@ -1529,6 +1529,7 @@ dependencies = [
 [[package]]
 name = "ecdsa_pops"
 version = "0.1.0"
+source = "git+https://github.com/ubamrein/ecdsa_pops.git#897afbb211b5f4caa2513b8d8bba316c74e20914"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -3954,6 +3955,7 @@ checksum = "74765f6d916ee2faa39bc8e68e4f3ed8949b48cccdac59983d287a7cb71ce9c5"
 [[package]]
 name = "r1csipa"
 version = "0.1.0"
+source = "git+https://github.com/ubamrein/ecdsa_pops.git#897afbb211b5f4caa2513b8d8bba316c74e20914"
 dependencies = [
  "ark-std",
  "bellpepper-core",
@@ -4383,6 +4385,7 @@ dependencies = [
 [[package]]
 name = "rok"
 version = "0.1.0"
+source = "git+https://github.com/ubamrein/ecdsa_pops.git#897afbb211b5f4caa2513b8d8bba316c74e20914"
 dependencies = [
  "ark-std",
  "bincode",

@@ -31,5 +31,5 @@ rdf-proofs = { git = "https://github.com/UbiqueInnovation/rdf-proofs", branch = 
 rdf-util = { path = "../rdf-util" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-ecdsa_pops = { path = "/Users/patrickamrein/Documents/Ubique/git/ecdsapop_t256ipa/ecdsa_pops" }
-rok = { path = "/Users/patrickamrein/Documents/Ubique/git/ecdsapop_t256ipa/rok" }
+ecdsa_pops = { git = "https://github.com/ubamrein/ecdsa_pops.git" }
+rok = { git = "https://github.com/ubamrein/ecdsa_pops.git" }
