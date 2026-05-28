@@ -125,7 +125,7 @@ fn claim_based() {
         )
         .unwrap();
 
-        println!("issuance done! {vc}");
+        // println!("issuance done! {vc}");
         vc
     };
 
@@ -171,7 +171,7 @@ fn claim_based() {
         )
         .unwrap();
 
-        println!("issuance done! {vc}");
+        // println!("issuance done! {vc}");
         vc
     };
 

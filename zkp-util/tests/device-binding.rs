@@ -121,7 +121,7 @@ fn device_binding() {
     )
     .unwrap();
 
-    println!("issuance done! {vc}");
+    // println!("issuance done! {vc}");
 
     let requirements = vec![requirements::ProofRequirement::Required(
         DiscloseRequirement {
@@ -272,7 +272,7 @@ fn device_binding_native() {
         )
         .unwrap();
 
-        println!("issuance done! {vc}");
+        // println!("issuance done! {vc}");
 
         let requirements = vec![requirements::ProofRequirement::Required(
             DiscloseRequirement {
@@ -303,6 +303,7 @@ fn device_binding_native() {
             ISSUER_PK,
             ISSUER_ID,
             ISSUER_KEY_ID,
+            None,
         )
         .unwrap();
 

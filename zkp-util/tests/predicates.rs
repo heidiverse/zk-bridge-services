@@ -81,7 +81,7 @@ fn predicates() {
     )
     .unwrap();
 
-    println!("issuance done! {vc}");
+    // println!("issuance done! {vc}");
 
     let requirements = vec![
         requirements::ProofRequirement::Required(DiscloseRequirement {

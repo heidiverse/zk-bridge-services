@@ -19,6 +19,7 @@ under the License.
  */
 
 use std::io::{BufReader, BufWriter, Cursor, Read, Seek, Write};
+use std::time::Instant;
 
 use anyhow::{anyhow, Context};
 use ark_bls12_381::G1Affine as BlsG1Affine;
@@ -27,6 +28,8 @@ use ark_ff::{BigInteger, PrimeField as ArkPrimeField};
 use ark_secp256r1::Fq;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use blake2::Blake2b512;
 use bulletproofs_plus_plus::prelude::SetupParams as BppSetupParams;
 use dock_crypto_utils::commitment::PedersenCommitmentKey;
@@ -161,9 +164,9 @@ impl DeviceBindingPresentationNative {
         let mut w = BufWriter::new(bytes);
         w.write_u64::<byteorder::BigEndian>(p.len() as u64).unwrap();
         w.write_all(&p).unwrap();
-        let p = bincode::serialize(&self.params).unwrap();
-        w.write_u64::<byteorder::BigEndian>(p.len() as u64).unwrap();
-        w.write_all(&p).unwrap();
+        // let p = bincode::serialize(&self.params).unwrap();
+        // w.write_u64::<byteorder::BigEndian>(p.len() as u64).unwrap();
+        // w.write_all(&p).unwrap();
         let compressed_size = self.bls_comm_pk_x1.compressed_size();
         w.write_u64::<byteorder::BigEndian>(compressed_size as u64)
             .unwrap();
@@ -179,14 +182,11 @@ impl DeviceBindingPresentationNative {
         w.write_all(&k_bytes).unwrap();
         w.into_inner().unwrap()
     }
-    pub fn deserialize<T: Read + Seek>(bytes: T) -> Self {
+    pub fn deserialize<T: Read + Seek>(bytes: T, params: PoPNativeNizk) -> Self {
         let mut reader = BufReader::new(bytes);
         let len_proof = reader.read_u64::<BigEndian>().unwrap();
         let mut proof_bytes = vec![0; len_proof as usize];
         reader.read_exact(&mut proof_bytes).unwrap();
-        let len_params = reader.read_u64::<BigEndian>().unwrap();
-        let mut params_bytes = vec![0; len_params as usize];
-        reader.read_exact(&mut params_bytes).unwrap();
 
         let len_x1 = reader.read_u64::<BigEndian>().unwrap();
         let mut x1_bytes = vec![0; len_x1 as usize];
@@ -206,7 +206,7 @@ impl DeviceBindingPresentationNative {
 
         Self {
             proof: bincode::deserialize(&proof_bytes).unwrap(),
-            params: bincode::deserialize(&params_bytes).unwrap(),
+            params,
             bls_comm_pk_x1: x1,
             bls_comm_pk_x2: x2,
             K,
@@ -283,13 +283,22 @@ impl DeviceBindingNative {
         message: SecpFr,
         message_signature: ecdsa::Signature,
         label: &str,
+        setup: Option<PoPNativeNizk>,
     ) -> anyhow::Result<Self> {
-        let nizk = PoPNativeNizk::new(label);
+        let start = Instant::now();
+        let nizk = if let Some(setup) = setup {
+            setup
+        } else {
+            PoPNativeNizk::new(label)
+        };
+        let end = Instant::now();
+        println!("elapsed [conversion]: {}", (end - start).as_millis());
         let ecdsa = ECDSA {
             pp: Secp256r1Affine::generator(),
         };
         let gs = [*nizk.ck_bls(), *nizk.ck_bls()];
         let h = nizk.ck_bls_blinding();
+
         let pp = RelECDSAParams::<G1Affine, 2>::new(gs, *h, ecdsa);
 
         let pk = arkp256_to_p256(&public_key);
@@ -300,6 +309,8 @@ impl DeviceBindingNative {
             Rx: arkfq_to_fq(&message_signature.rand_x_coord),
             response: arkfq_to_fq(&message_signature.response),
         };
+
+        let start = Instant::now();
 
         let sigma_converted = ecdsa.convert(&pk, &m, &sigma);
         // sample randomness for the commitments
@@ -328,12 +339,15 @@ impl DeviceBindingNative {
         let limbs = fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&w.Q.x).unwrap();
 
         let r_prover = RelECDSA::new(pp, x, Some(w));
-
+        println!("elapsed [setup]: {}", (end - start).as_millis());
         let mut transcript_prover = ecdsa_pops::merlin::Transcript::new(b"pop native proof");
         println!("start proof");
+        let start = Instant::now();
         let proof = nizk
             .prove(&mut transcript_prover, &r_prover, &mut OsRng)
             .unwrap();
+        let end = Instant::now();
+        println!("elapsed [actual proof]: {}", (end - start).as_millis());
         println!("proof finished");
         Ok(Self {
             proof: proof,
@@ -582,6 +596,22 @@ impl DeviceBindingPresentationSigma {
 pub fn change_field(p: &SecpFq) -> BlsFr {
     from_base_field_to_scalar_field::<Fq, BlsFr>(p)
 }
+pub fn limbs_from_public_key(x: &str) -> (String, String) {
+    use base64::prelude::BASE64_STANDARD;
+    let x = BASE64_STANDARD.decode(x).unwrap();
+    let x = SecpFq::from(BigUint::from_bytes_be(&x));
+    let limbs = fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&arkfp_to_fp(&x)).unwrap();
+    let x: BlsFr = from_blsfr_to_arkblsfr(&limbs[0]);
+    let y: BlsFr = from_blsfr_to_arkblsfr(&limbs[1]);
+
+    let x_bytes = x.into_bigint().to_bytes_be();
+    let y_bytes = y.into_bigint().to_bytes_be();
+
+    (
+        BASE64_STANDARD.encode(x_bytes),
+        BASE64_STANDARD.encode(y_bytes),
+    )
+}
 
 #[test]
 pub fn test_device_binding() {
@@ -653,14 +683,20 @@ pub fn test_device_binding_native() {
     let message = SecpFr::rand(&mut rng);
     let message_signature = ecdsa::Signature::new_prehashed(&mut rng, message, secret_key);
 
-    let db =
-        DeviceBindingNative::new(public_key, message, message_signature, "comm-key-secp").unwrap();
+    let db = DeviceBindingNative::new(
+        public_key,
+        message,
+        message_signature,
+        "comm-key-secp",
+        None,
+    )
+    .unwrap();
 
     let presentation = db.present();
 
     let bytes = presentation.serialize();
     println!("{}", bytes.len());
-    let proof = DeviceBindingPresentationNative::deserialize(Cursor::new(bytes));
+    let proof = DeviceBindingPresentationNative::deserialize(Cursor::new(bytes.clone()), db.params);
     let mut transcript_verifier = ecdsa_pops::merlin::Transcript::new(b"pop native proof");
     let x = RelECDSAStatement::new(
         [
@@ -683,19 +719,19 @@ pub fn test_device_binding_native() {
         .params
         .verify(&mut transcript_verifier, &r_verifier, &proof.proof)
         .unwrap();
-    // let presentation =
-    //     DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(bytes)).unwrap();
+    let presentation =
+        DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(bytes)).unwrap();
 
-    // presentation
-    //     .verify(
-    //         &mut rng,
-    //         message,
-    //         b"comm-key-secp",
-    //         b"comm-key-tom",
-    //         b"comm-key-bls",
-    //         b"bpp-setup",
-    //         b"transcript",
-    //         b"challenge",
-    //     )
-    //     .unwrap();
+    presentation
+        .verify(
+            &mut rng,
+            message,
+            b"comm-key-secp",
+            b"comm-key-tom",
+            b"comm-key-bls",
+            b"bpp-setup",
+            b"transcript",
+            b"challenge",
+        )
+        .unwrap();
 }

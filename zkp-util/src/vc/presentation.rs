@@ -18,11 +18,17 @@ specific language governing permissions and limitations
 under the License.
  */
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    time::Instant,
+};
 
 use anyhow::Context;
 use ark_bls12_381::Bls12_381;
-use ecdsa_pops::utils::{fp_to_arkfp, fq_to_arkfq, fr_to_arkfr};
+use ecdsa_pops::{
+    utils::{fp_to_arkfp, fq_to_arkfq, fr_to_arkfr},
+    PoPNativeNizk,
+};
 use proof_system::prelude::{
     ped_comm::PedersenCommitment, EqualWitnesses, MetaStatements, Statements, Witness, Witnesses,
 };
@@ -224,9 +230,10 @@ pub fn present<R: RngCore>(
             y_value,
             NamedNode::new_unchecked(y_type),
         ));
+        let terms = rdf_proofs::signature::transform(&vc.document).unwrap();
 
-        let x_index = index_of_vc(&vc, &x_term);
-        let y_index = index_of_vc(&vc, &y_term);
+        let x_index = index_of_vc(&vc, &x_term, &terms);
+        let y_index = index_of_vc(&vc, &y_term, &terms);
 
         meta_statements
             .add_witness_equality(EqualWitnesses(BTreeSet::from([(0, x_index), (1, 0)])));
@@ -302,10 +309,16 @@ pub fn present_native<R: RngCore>(
     issuer_pk: &str,
     issuer_id: &str,
     issuer_key_id: &str,
+    setup: Option<PoPNativeNizk>,
 ) -> anyhow::Result<VerifiablePresentationNative> {
+    let start = Instant::now();
     let mut deanon_map = HashMap::<NamedOrBlankNode, Term>::new();
     let mut predicates = Vec::<Graph>::new();
     let circuits = load_circuits(proving_keys);
+    let end = Instant::now();
+    println!("elapsed [Circuits loaded]: {}", (end - start).as_millis());
+
+    let start = Instant::now();
 
     // Figure out what information needs to be disclosed and prepare the vp
     let vc_document = rdf_util::Value::from(&vc.document);
@@ -389,6 +402,13 @@ pub fn present_native<R: RngCore>(
             }
         }
     }
+    let end = Instant::now();
+    println!(
+        "elapsed [requirements added]: {}",
+        (end - start).as_millis()
+    );
+
+    let start = Instant::now();
 
     let mut vp_document = vc_document.clone();
 
@@ -401,12 +421,16 @@ pub fn present_native<R: RngCore>(
     let mut witnesses = Witnesses::<Bls12_381>::new();
 
     let device_binding = if let Some(db_req) = device_binding {
+        let start = Instant::now();
         let db = DeviceBindingNative::new(
             db_req.public_key,
             db_req.message,
             db_req.message_signature,
             "pop",
+            setup,
         )?;
+        let end = Instant::now();
+        println!("elapsed [actual proof]: {}", (end - start).as_millis());
         let coms = vec![
             from_g1_to_arkg1(&db.params.ck_bls()),
             from_g1_to_arkg1(&db.params.ck_bls_blinding()),
@@ -461,9 +485,10 @@ pub fn present_native<R: RngCore>(
             y_value,
             NamedNode::new_unchecked(y_type),
         ));
+        let terms = rdf_proofs::signature::transform(&vc.document).unwrap();
 
-        let x_index = index_of_vc(&vc, &x_term);
-        let y_index = index_of_vc(&vc, &y_term);
+        let x_index = index_of_vc(&vc, &x_term, &terms);
+        let y_index = index_of_vc(&vc, &y_term, &terms);
 
         meta_statements
             .add_witness_equality(EqualWitnesses(BTreeSet::from([(0, x_index), (1, 0)])));
@@ -487,7 +512,13 @@ pub fn present_native<R: RngCore>(
     } else {
         None
     };
+    let end = Instant::now();
+    println!(
+        "elapsed [device binding proof]: {}",
+        (end - start).as_millis()
+    );
 
+    let start = Instant::now();
     // Create the proof
     let issuer = KeyGraph::from(rdf_util::from_str_with_hint(format!(
         r#"
@@ -522,6 +553,11 @@ pub fn present_native<R: RngCore>(
         Some(meta_statements),
         Some(witnesses),
     )?;
+    let end = Instant::now();
+    println!(
+        "elapsed [proof of knowledge]: {}",
+        (end - start).as_millis()
+    );
 
     Ok(VerifiablePresentationNative {
         proof: MultiGraph::new(&proof),
@@ -583,6 +619,7 @@ pub fn present_two<R: RngCore>(
                 body1[&req.key].clone();
         }
 
+        let terms = rdf_proofs::signature::transform(&vc1.document).unwrap();
         for eq in claims_eq {
             let v = body1
                 .get(&eq.key1)
@@ -594,7 +631,7 @@ pub fn present_two<R: RngCore>(
 
             let term = v.to_term_value().unwrap();
 
-            eq_idx_1.push(index_of_vc(&vc1, &term));
+            eq_idx_1.push(index_of_vc(&vc1, &term, &terms));
             deanon_map.insert(
                 NamedOrBlankNode::BlankNode(BlankNode::new_unchecked(blank_id.clone())),
                 term,
@@ -657,9 +694,10 @@ pub fn present_two<R: RngCore>(
                 y_value,
                 NamedNode::new_unchecked(y_type),
             ));
+            let terms = rdf_proofs::signature::transform(&vc1.document).unwrap();
 
-            let x_index = index_of_vc(&vc1, &x_term);
-            let y_index = index_of_vc(&vc1, &y_term);
+            let x_index = index_of_vc(&vc1, &x_term, &terms);
+            let y_index = index_of_vc(&vc1, &y_term, &terms);
 
             meta_statements
                 .add_witness_equality(EqualWitnesses(BTreeSet::from([(0, x_index), (2, 0)])));
@@ -704,6 +742,8 @@ pub fn present_two<R: RngCore>(
                 body2[&req.key].clone();
         }
 
+        let terms = rdf_proofs::signature::transform(&vc2.document).unwrap();
+
         for eq in claims_eq {
             let v = body2
                 .get(&eq.key2)
@@ -715,7 +755,7 @@ pub fn present_two<R: RngCore>(
 
             let term = v.to_term_value().unwrap();
 
-            eq_idx_2.push(index_of_vc(&vc2, &term));
+            eq_idx_2.push(index_of_vc(&vc2, &term, &terms));
             deanon_map.insert(
                 NamedOrBlankNode::BlankNode(BlankNode::new_unchecked(blank_id.clone())),
                 term,
