@@ -18,7 +18,7 @@ specific language governing permissions and limitations
 under the License.
  */
 
-use std::io::{BufReader, BufWriter, Cursor, Read, Seek, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::time::Instant;
 
 use anyhow::{anyhow, Context};
@@ -28,7 +28,6 @@ use ark_ff::{BigInteger, PrimeField as ArkPrimeField};
 use ark_secp256r1::Fq;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use blake2::Blake2b512;
 use bulletproofs_plus_plus::prelude::SetupParams as BppSetupParams;
@@ -38,17 +37,13 @@ use dock_crypto_utils::{
     transcript::{new_merlin_transcript, Transcript},
 };
 use ecdsa_pops::halo2curves::ff::derive::byteorder::{
-    self, BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt,
+    self, BigEndian, ReadBytesExt, WriteBytesExt,
 };
 use ecdsa_pops::halo2curves::secp256r1::Secp256r1Affine;
-use ecdsa_pops::halo2curves::serde::SerdeObject;
-use ecdsa_pops::halo2curves::CurveAffine;
 use ecdsa_pops::utils::ecdsa::{ECDSASignature, ECDSA};
-use ecdsa_pops::utils::{
-    arkfp_to_fp, arkfq_to_fq, arkp256_to_p256, fp_to_scalars, p256_to_arkp256,
-};
+use ecdsa_pops::utils::{arkfp_to_fp, arkfq_to_fq, arkp256_to_p256, fp_to_scalars};
 use ecdsa_pops::{
-    bincode, halo2curves, G1Affine, PoPNativeComposedRoK, PoPNativeNizk, RelECDSA, RelECDSAParams,
+    bincode, G1Affine, PoPNativeComposedRoK, PoPNativeNizk, RelECDSA, RelECDSAParams,
     RelECDSAStatement, RelECDSAWitness,
 };
 use equality_across_groups::{
@@ -115,6 +110,7 @@ pub struct DeviceBindingSigma {
     pub bls_scalars_y: Vec<BlsFr>,
 }
 
+#[allow(nonstandard_style)]
 pub struct DeviceBindingNative {
     pub proof: <PoPNativeComposedRoK as RoK>::Proof,
     pub params: PoPNativeNizk,
@@ -148,6 +144,8 @@ pub struct DeviceBindingPresentationSigma {
     pub bls_comm_pk_y: BlsG1Affine,
 }
 
+#[derive(Clone)]
+#[allow(nonstandard_style)]
 pub struct DeviceBindingPresentationNative {
     pub proof: <PoPNativeComposedRoK as RoK>::Proof,
     pub params: PoPNativeNizk,
@@ -158,14 +156,14 @@ pub struct DeviceBindingPresentationNative {
 
 impl DeviceBindingPresentationNative {
     pub fn serialize(&self) -> Vec<u8> {
-        let p = bincode::serialize(&self.proof).unwrap();
         let bytes = vec![];
         let mut w = BufWriter::new(bytes);
+        let p = bincode::serialize(&self.proof).unwrap();
         w.write_u64::<byteorder::BigEndian>(p.len() as u64).unwrap();
         w.write_all(&p).unwrap();
-        // let p = bincode::serialize(&self.params).unwrap();
-        // w.write_u64::<byteorder::BigEndian>(p.len() as u64).unwrap();
-        // w.write_all(&p).unwrap();
+        let p = bincode::serialize(&self.params).unwrap();
+        w.write_u64::<byteorder::BigEndian>(p.len() as u64).unwrap();
+        w.write_all(&p).unwrap();
         let compressed_size = self.bls_comm_pk_x1.compressed_size();
         w.write_u64::<byteorder::BigEndian>(compressed_size as u64)
             .unwrap();
@@ -181,11 +179,20 @@ impl DeviceBindingPresentationNative {
         w.write_all(&k_bytes).unwrap();
         w.into_inner().unwrap()
     }
-    pub fn deserialize<T: Read + Seek>(bytes: T, params: PoPNativeNizk) -> Self {
+
+    #[allow(nonstandard_style)]
+    pub fn deserialize<T: Read + Seek>(bytes: T) -> Self {
         let mut reader = BufReader::new(bytes);
+
         let len_proof = reader.read_u64::<BigEndian>().unwrap();
         let mut proof_bytes = vec![0; len_proof as usize];
         reader.read_exact(&mut proof_bytes).unwrap();
+        let proof = bincode::deserialize(&proof_bytes).unwrap();
+
+        let len_params = reader.read_u64::<BigEndian>().unwrap();
+        let mut params_bytes = vec![0; len_params as usize];
+        reader.read_exact(&mut params_bytes).unwrap();
+        let params = bincode::deserialize(&params_bytes).unwrap();
 
         let len_x1 = reader.read_u64::<BigEndian>().unwrap();
         let mut x1_bytes = vec![0; len_x1 as usize];
@@ -204,7 +211,7 @@ impl DeviceBindingPresentationNative {
         let K = bincode::deserialize(&k_bytes).unwrap();
 
         Self {
-            proof: bincode::deserialize(&proof_bytes).unwrap(),
+            proof,
             params,
             bls_comm_pk_x1: x1,
             bls_comm_pk_x2: x2,
@@ -612,51 +619,34 @@ pub fn limbs_from_public_key(x: &str) -> (String, String) {
     )
 }
 
-#[test]
-pub fn test_device_binding() {
+#[cfg(test)]
+mod tests {
     use std::io::Cursor;
 
-    use ark_ec::CurveGroup;
-    use ark_secp256r1::{G_GENERATOR_X, G_GENERATOR_Y};
+    use super::*;
 
-    const SECP_GEN: SecpAffine = SecpAffine::new_unchecked(G_GENERATOR_X, G_GENERATOR_Y);
+    #[test]
+    pub fn test_device_binding() {
+        use std::io::Cursor;
 
-    let mut rng = rand_core::OsRng;
+        use ark_ec::CurveGroup;
+        use ark_secp256r1::{G_GENERATOR_X, G_GENERATOR_Y};
 
-    let secret_key = SecpFr::rand(&mut rng);
-    let public_key = (SECP_GEN * secret_key).into_affine();
+        const SECP_GEN: SecpAffine = SecpAffine::new_unchecked(G_GENERATOR_X, G_GENERATOR_Y);
 
-    let message = SecpFr::rand(&mut rng);
-    let message_signature = ecdsa::Signature::new_prehashed(&mut rng, message, secret_key);
+        let mut rng = rand_core::OsRng;
 
-    let db = DeviceBindingSigma::new(
-        &mut rng,
-        public_key,
-        message,
-        message_signature,
-        b"comm-key-secp",
-        b"comm-key-tom",
-        b"comm-key-bls",
-        b"bpp-setup",
-        b"transcript",
-        b"challenge",
-    )
-    .unwrap();
+        let secret_key = SecpFr::rand(&mut rng);
+        let public_key = (SECP_GEN * secret_key).into_affine();
 
-    let presentation = db.present();
+        let message = SecpFr::rand(&mut rng);
+        let message_signature = ecdsa::Signature::new_prehashed(&mut rng, message, secret_key);
 
-    let mut bytes = Vec::<u8>::new();
-    presentation.serialize_compressed(&mut bytes).unwrap();
-
-    println!("{}", bytes.len());
-
-    let presentation =
-        DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(bytes)).unwrap();
-
-    presentation
-        .verify(
+        let db = DeviceBindingSigma::new(
             &mut rng,
+            public_key,
             message,
+            message_signature,
             b"comm-key-secp",
             b"comm-key-tom",
             b"comm-key-bls",
@@ -665,71 +655,83 @@ pub fn test_device_binding() {
             b"challenge",
         )
         .unwrap();
-}
 
-#[test]
-pub fn test_device_binding_native() {
-    use ark_ec::CurveGroup;
-    use ark_secp256r1::{G_GENERATOR_X, G_GENERATOR_Y};
+        let presentation = db.present();
 
-    const SECP_GEN: SecpAffine = SecpAffine::new_unchecked(G_GENERATOR_X, G_GENERATOR_Y);
+        let mut bytes = Vec::<u8>::new();
+        presentation.serialize_compressed(&mut bytes).unwrap();
 
-    let mut rng = rand_core::OsRng;
+        println!("{}", bytes.len());
 
-    let secret_key = SecpFr::rand(&mut rng);
-    let public_key = (SECP_GEN * secret_key).into_affine();
+        let presentation =
+            DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(bytes)).unwrap();
 
-    let message = SecpFr::rand(&mut rng);
-    let message_signature = ecdsa::Signature::new_prehashed(&mut rng, message, secret_key);
+        presentation
+            .verify(
+                &mut rng,
+                message,
+                b"comm-key-secp",
+                b"comm-key-tom",
+                b"comm-key-bls",
+                b"bpp-setup",
+                b"transcript",
+                b"challenge",
+            )
+            .unwrap();
+    }
 
-    let db = DeviceBindingNative::new(
-        public_key,
-        message,
-        message_signature,
-        "comm-key-secp",
-        None,
-    )
-    .unwrap();
+    #[test]
+    pub fn test_device_binding_native() {
+        use ark_ec::CurveGroup;
+        use ark_secp256r1::{G_GENERATOR_X, G_GENERATOR_Y};
 
-    let presentation = db.present();
+        const SECP_GEN: SecpAffine = SecpAffine::new_unchecked(G_GENERATOR_X, G_GENERATOR_Y);
 
-    let bytes = presentation.serialize();
-    println!("{}", bytes.len());
-    let proof = DeviceBindingPresentationNative::deserialize(Cursor::new(bytes.clone()), db.params);
-    let mut transcript_verifier = ecdsa_pops::merlin::Transcript::new(b"pop native proof");
-    let x = RelECDSAStatement::new(
-        [
-            from_arkg1_to_g1(&proof.bls_comm_pk_x1),
-            from_arkg1_to_g1(&proof.bls_comm_pk_x2),
-        ],
-        None,
-        arkfq_to_fq(&message).unwrap(),
-        proof.K,
-    );
-    let ecdsa = ECDSA {
-        pp: Secp256r1Affine::generator(),
-    };
-    let nizk = proof.params;
-    let gs = [*nizk.ck_bls(), *nizk.ck_bls()];
-    let h = nizk.ck_bls_blinding();
-    let pp = RelECDSAParams::<G1Affine, 2>::new(gs, *h, ecdsa);
-    let r_verifier = RelECDSA::new(pp, x, None);
-    let _ = nizk
-        .verify(&mut transcript_verifier, &r_verifier, &proof.proof)
-        .unwrap();
-    let presentation =
-        DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(bytes)).unwrap();
+        let mut rng = rand_core::OsRng;
 
-    presentation
-        .verify(
-            &mut rng,
+        let secret_key = SecpFr::rand(&mut rng);
+        let public_key = (SECP_GEN * secret_key).into_affine();
+
+        let message = SecpFr::rand(&mut rng);
+        let message_signature = ecdsa::Signature::new_prehashed(&mut rng, message, secret_key);
+
+        let db = DeviceBindingNative::new(
+            public_key,
             message,
-            b"comm-key-secp",
-            b"comm-key-tom",
-            b"comm-key-bls",
-            b"bpp-setup",
-            b"transcript",
-            b"challenge",
+            message_signature,
+            "comm-key-secp",
+            None,
         )
         .unwrap();
+
+        let presentation = db.present();
+
+        let bytes = presentation.serialize();
+        println!("{}", bytes.len());
+        let proof = DeviceBindingPresentationNative::deserialize(Cursor::new(bytes.clone()));
+
+        proof.verify(b"pop native proof", message).unwrap();
+
+        let mut transcript_verifier = ecdsa_pops::merlin::Transcript::new(b"pop native proof");
+        let x = RelECDSAStatement::new(
+            [
+                from_arkg1_to_g1(&proof.bls_comm_pk_x1),
+                from_arkg1_to_g1(&proof.bls_comm_pk_x2),
+            ],
+            None,
+            arkfq_to_fq(&message).unwrap(),
+            proof.K,
+        );
+        let ecdsa = ECDSA {
+            pp: Secp256r1Affine::generator(),
+        };
+        let nizk = proof.params;
+        let gs = [*nizk.ck_bls(), *nizk.ck_bls()];
+        let h = nizk.ck_bls_blinding();
+        let pp = RelECDSAParams::<G1Affine, 2>::new(gs, *h, ecdsa);
+        let r_verifier = RelECDSA::new(pp, x, None);
+        let _ = nizk
+            .verify(&mut transcript_verifier, &r_verifier, &proof.proof)
+            .unwrap();
+    }
 }

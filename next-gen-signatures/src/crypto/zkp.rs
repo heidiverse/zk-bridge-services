@@ -466,7 +466,6 @@ pub fn verify_native<R: RngCore>(
     issuer_pk: &str,
     issuer_id: &str,
     issuer_key_id: &str,
-    setup: PoPNativeNizk,
 ) -> anyhow::Result<JsonValue> {
     let presentation = {
         let json = serde_json::from_str::<JsonValue>(&String::from_utf8(
@@ -481,10 +480,9 @@ pub fn verify_native<R: RngCore>(
         let device_binding = if let Some(db) = json.get("device_binding") {
             let bytes = BASE64_URL_SAFE_NO_PAD
                 .decode(db.as_str().context("Invalid device_binding found!")?)?;
-            Some(DeviceBindingPresentationNative::deserialize(
-                Cursor::new(bytes),
-                setup,
-            ))
+            Some(DeviceBindingPresentationNative::deserialize(Cursor::new(
+                bytes,
+            )))
         } else {
             None
         };

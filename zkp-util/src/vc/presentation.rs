@@ -25,10 +25,7 @@ use std::{
 
 use anyhow::Context;
 use ark_bls12_381::Bls12_381;
-use ecdsa_pops::{
-    utils::{fp_to_arkfp, fq_to_arkfq, fr_to_arkfr},
-    PoPNativeNizk,
-};
+use ecdsa_pops::PoPNativeNizk;
 use proof_system::prelude::{
     ped_comm::PedersenCommitment, EqualWitnesses, MetaStatements, Statements, Witness, Witnesses,
 };
@@ -61,6 +58,7 @@ pub struct VerifiablePresentationSigma {
     pub device_binding: Option<DeviceBindingPresentationSigma>,
 }
 
+#[derive(Clone)]
 pub struct VerifiablePresentationNative {
     pub proof: MultiGraph,
     pub device_binding: Option<DeviceBindingPresentationNative>,

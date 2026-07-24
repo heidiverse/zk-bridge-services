@@ -24,7 +24,7 @@ use ark_secp256r1::Fq;
 use ark_std::UniformRand;
 use base64::{prelude::BASE64_STANDARD, Engine};
 use chrono::DateTime;
-use ecdsa_pops::utils::{arkfp_to_fp, fp_to_scalars, fq_to_arkfq};
+use ecdsa_pops::utils::{arkfp_to_fp, fp_to_scalars};
 use equality_across_groups::ec::commitments::from_base_field_to_scalar_field;
 use kvac::bbs_sharp::ecdsa;
 use rdf_util::oxrdf::vocab::xsd;
@@ -236,7 +236,8 @@ fn device_binding_native() {
 
         let db = {
             let limbs =
-                fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&arkfp_to_fp(&public_key.x)).unwrap();
+                fp_to_scalars::<ecdsa_pops::G1Affine, 2>(&arkfp_to_fp(&public_key.x).unwrap())
+                    .unwrap();
             let x: BlsFr = from_blsfr_to_arkblsfr(&limbs[0]);
             let y: BlsFr = from_blsfr_to_arkblsfr(&limbs[1]);
 
