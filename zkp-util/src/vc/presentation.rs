@@ -808,3 +808,258 @@ pub fn present_two<R: RngCore>(
         device_binding: db.map(|db| db.present()),
     })
 }
+
+pub fn present_two_native<R: RngCore>(
+    rng: &mut R,
+
+    // This is the identity VC
+    vc1: VerifiableCredential,
+    req1: &Vec<DiscloseRequirement>,
+    db1: Option<(DeviceBindingRequirement, Option<PoPNativeNizk>)>,
+
+    // This is the diploma VC
+    vc2: VerifiableCredential,
+    req2: &Vec<DiscloseRequirement>,
+
+    claims_eq: &Vec<EqualClaimsRequirement>,
+
+    issuer_pk: &str,
+    issuer_id: &str,
+    issuer_key_id: &str,
+) -> anyhow::Result<VerifiablePresentationNative> {
+    let mut deanon_map = HashMap::<NamedOrBlankNode, Term>::new();
+
+    let vc1_doc = rdf_util::Value::from(&vc1.document);
+    let (body1, bid1) = vc1_doc["https://www.w3.org/2018/credentials#credentialSubject"]
+        .as_object()
+        .context("Couldn't get the vc_document credentialSubject!")?;
+
+    let vc2_doc = rdf_util::Value::from(&vc2.document);
+    let (body2, bid2) = vc2_doc["https://www.w3.org/2018/credentials#credentialSubject"]
+        .as_object()
+        .context("Couldn't get the vc_document credentialSubject!")?;
+
+    let key_graph = KeyGraph::from(rdf_util::parse_triples(format!(
+        r#"
+            <{issuer_id}> <https://w3id.org/security#verificationMethod> <{issuer_key_id}> .
+            <{issuer_key_id}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/security#Multikey> .
+            <{issuer_key_id}> <https://w3id.org/security#controller> <{issuer_id}> .
+            <{issuer_key_id}> <https://w3id.org/security#publicKeyMultibase> "{issuer_pk}"^^<https://w3id.org/security#multibase> .
+        "#
+    ))?);
+
+    let mut statements = Statements::<Bls12_381>::new();
+    let mut meta_statements = MetaStatements::new();
+    let mut witnesses = Witnesses::<Bls12_381>::new();
+
+    let mut eq_idx_1 = Vec::<usize>::new();
+    let (vc1_disclosed, db) = {
+        let mut doc = vc1_doc.clone();
+        doc["https://www.w3.org/2018/credentials#credentialSubject"] =
+            RdfValue::Object(BTreeMap::new(), bid1.clone());
+
+        for req in req1 {
+            doc["https://www.w3.org/2018/credentials#credentialSubject"][req.key.clone()] =
+                body1[&req.key].clone();
+        }
+
+        let terms = rdf_proofs::signature::transform(&vc1.document).unwrap();
+        for eq in claims_eq {
+            let v = body1
+                .get(&eq.key1)
+                .context("Couldn't find claim in vc1 for equality check")?;
+            let blank_id = format!("eq{}", deanon_map.len());
+
+            doc["https://www.w3.org/2018/credentials#credentialSubject"][eq.key1.clone()] =
+                RdfValue::ObjectRef(ObjectId::BlankNode(blank_id.clone()));
+
+            let term = v.to_term_value().unwrap();
+
+            eq_idx_1.push(index_of_vc(&vc1, &term, &terms));
+            deanon_map.insert(
+                NamedOrBlankNode::BlankNode(BlankNode::new_unchecked(blank_id.clone())),
+                term,
+            );
+        }
+
+        let device_binding = if let Some((db_req, setup)) = db1 {
+            let start = Instant::now();
+            let db = DeviceBindingNative::new(
+                db_req.public_key,
+                db_req.message,
+                db_req.message_signature,
+                "pop",
+                setup,
+            )?;
+            let end = Instant::now();
+            println!("elapsed [actual proof]: {}", (end - start).as_millis());
+            let coms = vec![
+                from_g1_to_arkg1(&db.params.ck_bls()),
+                from_g1_to_arkg1(&db.params.ck_bls_blinding()),
+            ];
+            statements.add(PedersenCommitment::new_statement_from_params(
+                coms.clone(),
+                from_g1_to_arkg1(&db.bls_comm_pk_x1),
+            ));
+
+            statements.add(PedersenCommitment::new_statement_from_params(
+                coms.clone(),
+                from_g1_to_arkg1(&db.bls_comm_pk_x2),
+            ));
+            let scalars_x1 = vec![
+                from_blsfr_to_arkblsfr(&db.bls_scalar_x1),
+                from_blsfr_to_arkblsfr(&db.bls_scalar_x1_blinding),
+            ];
+            let scalars_x2 = vec![
+                from_blsfr_to_arkblsfr(&db.bls_scalar_x2),
+                from_blsfr_to_arkblsfr(&db.bls_scalar_x2_blinding),
+            ];
+
+            witnesses.add(Witness::PedersenCommitment(scalars_x1));
+            witnesses.add(Witness::PedersenCommitment(scalars_x2));
+
+            let (db_map, db_id) = vc1_doc[DEVICE_BINDING_KEY]
+                .as_object()
+                .context("verifiable credential has no device_binding")?;
+
+            anyhow::ensure!(
+                !matches!(db_id, ObjectId::None),
+                "device binding object id can't be none!"
+            );
+            let RdfValue::Typed(x_value, x_type) = db_map
+                .get(DEVICE_BINDING_KEY_X)
+                .context("device binding has no x value")?
+            else {
+                anyhow::bail!("device binding invalid x value")
+            };
+            let x_term = Term::Literal(Literal::new_typed_literal(
+                x_value,
+                NamedNode::new_unchecked(x_type),
+            ));
+
+            let RdfValue::Typed(y_value, y_type) = db_map
+                .get(DEVICE_BINDING_KEY_Y)
+                .context("device binding has no y value")?
+            else {
+                anyhow::bail!("device binding invalid y value")
+            };
+            let y_term = Term::Literal(Literal::new_typed_literal(
+                y_value,
+                NamedNode::new_unchecked(y_type),
+            ));
+            let terms = rdf_proofs::signature::transform(&vc1.document).unwrap();
+
+            let x_index = index_of_vc(&vc1, &x_term, &terms);
+            let y_index = index_of_vc(&vc1, &y_term, &terms);
+
+            meta_statements
+                .add_witness_equality(EqualWitnesses(BTreeSet::from([(0, x_index), (2, 0)])));
+            meta_statements
+                .add_witness_equality(EqualWitnesses(BTreeSet::from([(0, y_index), (3, 0)])));
+
+            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X] =
+                RdfValue::ObjectRef(ObjectId::BlankNode("d0".into()));
+            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_Y] =
+                RdfValue::ObjectRef(ObjectId::BlankNode("d1".into()));
+            deanon_map.insert(
+                NamedOrBlankNode::BlankNode(BlankNode::new_unchecked("d0")),
+                x_term.clone(),
+            );
+            deanon_map.insert(
+                NamedOrBlankNode::BlankNode(BlankNode::new_unchecked("d1")),
+                y_term.clone(),
+            );
+
+            Some(db)
+        } else {
+            None
+        };
+
+        (
+            VerifiableCredential {
+                document: doc.to_graph(None),
+                proof: vc1.proof.clone(),
+            },
+            device_binding,
+        )
+    };
+
+    let mut eq_idx_2 = Vec::<usize>::new();
+    let vc2_disclosed = {
+        let mut doc = vc2_doc.clone();
+        doc["https://www.w3.org/2018/credentials#credentialSubject"] =
+            RdfValue::Object(BTreeMap::new(), bid2.clone());
+
+        for req in req2 {
+            doc["https://www.w3.org/2018/credentials#credentialSubject"][req.key.clone()] =
+                body2[&req.key].clone();
+        }
+
+        let terms = rdf_proofs::signature::transform(&vc2.document).unwrap();
+
+        for eq in claims_eq {
+            let v = body2
+                .get(&eq.key2)
+                .context("Couldn't find claim in vc2 for equality check")?;
+            let blank_id = format!("eq{}", deanon_map.len());
+
+            doc["https://www.w3.org/2018/credentials#credentialSubject"][eq.key2.clone()] =
+                RdfValue::ObjectRef(ObjectId::BlankNode(blank_id.clone()));
+
+            let term = v.to_term_value().unwrap();
+
+            eq_idx_2.push(index_of_vc(&vc2, &term, &terms));
+            deanon_map.insert(
+                NamedOrBlankNode::BlankNode(BlankNode::new_unchecked(blank_id.clone())),
+                term,
+            );
+        }
+
+        VerifiableCredential {
+            document: doc.to_graph(None),
+            proof: vc2.proof.clone(),
+        }
+    };
+
+    for (i, eq) in claims_eq.iter().enumerate() {
+        let v1 = body1
+            .get(&eq.key1)
+            .context("Couldn't find claim in vc1 for equality check")?;
+        let v2 = body2
+            .get(&eq.key2)
+            .context("Couldn't find claim in vc2 for equality check")?;
+
+        anyhow::ensure!(v1 == v2, "Claims to be equal are not equal!");
+        meta_statements.add_witness_equality(EqualWitnesses(BTreeSet::from([
+            (0, eq_idx_1[i]),
+            (1, eq_idx_2[i]),
+        ])));
+    }
+
+    let vc_pairs = vec![
+        VcPair::new(vc1, vc1_disclosed),
+        VcPair::new(vc2, vc2_disclosed),
+    ];
+
+    let proof = rdf_proofs::derive_proof(
+        rng,
+        &vc_pairs,
+        &deanon_map,
+        &key_graph,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Vec::new(),
+        HashMap::new(),
+        Some(statements),
+        Some(meta_statements),
+        Some(witnesses),
+    )?;
+
+    Ok(VerifiablePresentationNative {
+        proof: MultiGraph::new(&proof),
+        device_binding: db.map(|db| db.present()),
+    })
+}
