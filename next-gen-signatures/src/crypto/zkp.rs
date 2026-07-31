@@ -18,7 +18,8 @@ use static_iref::iri;
 pub use zkp_util::vc::requirements::{DiscloseRequirement, ProofRequirement};
 use zkp_util::{
     device_binding::{
-        DeviceBindingPresentationNative, DeviceBindingPresentationSigma, SecpAffine, SecpFq, SecpFr,
+        limbs_from_public_key, DeviceBindingPresentationNative, DeviceBindingPresentationSigma,
+        SecpAffine, SecpFq, SecpFr,
     },
     ecdsa_pops::PoPNativeNizk,
     vc::{
@@ -148,6 +149,8 @@ pub async fn issue<R: RngCore>(
 
     // Change bases
     let device_binding = if let Some((x, y)) = device_binding {
+        let (x_1, x_2) = limbs_from_public_key(&x);
+
         let x = SecpFq::from(BigUint::from_bytes_be(&BASE64_STANDARD.decode(x)?));
         let y = SecpFq::from(BigUint::from_bytes_be(&BASE64_STANDARD.decode(y)?));
 
@@ -157,7 +160,7 @@ pub async fn issue<R: RngCore>(
         let x = BASE64_STANDARD.encode(x.into_bigint().to_bytes_be());
         let y = BASE64_STANDARD.encode(y.into_bigint().to_bytes_be());
 
-        Some((x, y))
+        Some((x, y, x_1, x_2))
     } else {
         None
     };

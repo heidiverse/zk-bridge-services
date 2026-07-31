@@ -74,6 +74,8 @@ const NUM_CHUNKS: usize = 4;
 pub const DEVICE_BINDING_KEY: &str = "https://zkp-ld.org/deviceBinding";
 pub const DEVICE_BINDING_KEY_X: &str = "https://zkp-ld.org/deviceBinding#x";
 pub const DEVICE_BINDING_KEY_Y: &str = "https://zkp-ld.org/deviceBinding#y";
+pub const DEVICE_BINDING_KEY_X_1: &str = "https://zkp-ld.org/deviceBinding#x1";
+pub const DEVICE_BINDING_KEY_X_2: &str = "https://zkp-ld.org/deviceBinding#x2";
 
 pub type SecpFr = ark_secp256r1::Fr;
 pub type SecpFq = ark_secp256r1::Fq;

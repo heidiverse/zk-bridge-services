@@ -42,7 +42,8 @@ use crate::{
     device_binding::{
         from_blsfr_to_arkblsfr, from_g1_to_arkg1, DeviceBindingNative,
         DeviceBindingPresentationNative, DeviceBindingPresentationSigma, DeviceBindingSigma,
-        DEVICE_BINDING_KEY, DEVICE_BINDING_KEY_X, DEVICE_BINDING_KEY_Y,
+        DEVICE_BINDING_KEY, DEVICE_BINDING_KEY_X, DEVICE_BINDING_KEY_X_1, DEVICE_BINDING_KEY_X_2,
+        DEVICE_BINDING_KEY_Y,
     },
     vc::{
         index::index_of_vc,
@@ -462,26 +463,26 @@ pub fn present_native<R: RngCore>(
             !matches!(db_id, ObjectId::None),
             "device binding object id can't be none!"
         );
-        let RdfValue::Typed(x_value, x_type) = db_map
-            .get(DEVICE_BINDING_KEY_X)
-            .context("device binding has no x value")?
+        let RdfValue::Typed(x_1_value, x_1_type) = db_map
+            .get(DEVICE_BINDING_KEY_X_1)
+            .context("device binding has no x_1 value")?
         else {
-            anyhow::bail!("device binding invalid x value")
+            anyhow::bail!("device binding invalid x_1 value")
         };
         let x_term = Term::Literal(Literal::new_typed_literal(
-            x_value,
-            NamedNode::new_unchecked(x_type),
+            x_1_value,
+            NamedNode::new_unchecked(x_1_type),
         ));
 
-        let RdfValue::Typed(y_value, y_type) = db_map
-            .get(DEVICE_BINDING_KEY_Y)
-            .context("device binding has no y value")?
+        let RdfValue::Typed(x_2_value, x_2_type) = db_map
+            .get(DEVICE_BINDING_KEY_X_2)
+            .context("device binding has no x_2 value")?
         else {
-            anyhow::bail!("device binding invalid y value")
+            anyhow::bail!("device binding invalid x_2 value")
         };
         let y_term = Term::Literal(Literal::new_typed_literal(
-            y_value,
-            NamedNode::new_unchecked(y_type),
+            x_2_value,
+            NamedNode::new_unchecked(x_2_type),
         ));
         let terms = rdf_proofs::signature::transform(&vc.document).unwrap();
 
@@ -493,16 +494,16 @@ pub fn present_native<R: RngCore>(
         meta_statements
             .add_witness_equality(EqualWitnesses(BTreeSet::from([(0, y_index), (2, 0)])));
 
-        vp_document[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X] =
-            RdfValue::ObjectRef(ObjectId::BlankNode("d0".into()));
-        vp_document[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_Y] =
-            RdfValue::ObjectRef(ObjectId::BlankNode("d1".into()));
+        vp_document[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X_1] =
+            RdfValue::ObjectRef(ObjectId::BlankNode("d2".into()));
+        vp_document[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X_2] =
+            RdfValue::ObjectRef(ObjectId::BlankNode("d3".into()));
         deanon_map.insert(
-            NamedOrBlankNode::BlankNode(BlankNode::new_unchecked("d0")),
+            NamedOrBlankNode::BlankNode(BlankNode::new_unchecked("d2")),
             x_term.clone(),
         );
         deanon_map.insert(
-            NamedOrBlankNode::BlankNode(BlankNode::new_unchecked("d1")),
+            NamedOrBlankNode::BlankNode(BlankNode::new_unchecked("d3")),
             y_term.clone(),
         );
 
@@ -672,7 +673,7 @@ pub fn present_two<R: RngCore>(
                 "device binding object id can't be none!"
             );
             let RdfValue::Typed(x_value, x_type) = db_map
-                .get(DEVICE_BINDING_KEY_X)
+                .get(DEVICE_BINDING_KEY_X_1)
                 .context("device binding has no x value")?
             else {
                 anyhow::bail!("device binding invalid x value")
@@ -683,7 +684,7 @@ pub fn present_two<R: RngCore>(
             ));
 
             let RdfValue::Typed(y_value, y_type) = db_map
-                .get(DEVICE_BINDING_KEY_Y)
+                .get(DEVICE_BINDING_KEY_X_2)
                 .context("device binding has no y value")?
             else {
                 anyhow::bail!("device binding invalid y value")
@@ -702,9 +703,9 @@ pub fn present_two<R: RngCore>(
             meta_statements
                 .add_witness_equality(EqualWitnesses(BTreeSet::from([(0, y_index), (3, 0)])));
 
-            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X] =
+            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X_1] =
                 RdfValue::ObjectRef(ObjectId::BlankNode("d0".into()));
-            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_Y] =
+            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X_2] =
                 RdfValue::ObjectRef(ObjectId::BlankNode("d1".into()));
             deanon_map.insert(
                 NamedOrBlankNode::BlankNode(BlankNode::new_unchecked("d0")),
@@ -927,7 +928,7 @@ pub fn present_two_native<R: RngCore>(
                 "device binding object id can't be none!"
             );
             let RdfValue::Typed(x_value, x_type) = db_map
-                .get(DEVICE_BINDING_KEY_X)
+                .get(DEVICE_BINDING_KEY_X_1)
                 .context("device binding has no x value")?
             else {
                 anyhow::bail!("device binding invalid x value")
@@ -938,7 +939,7 @@ pub fn present_two_native<R: RngCore>(
             ));
 
             let RdfValue::Typed(y_value, y_type) = db_map
-                .get(DEVICE_BINDING_KEY_Y)
+                .get(DEVICE_BINDING_KEY_X_2)
                 .context("device binding has no y value")?
             else {
                 anyhow::bail!("device binding invalid y value")
@@ -957,9 +958,9 @@ pub fn present_two_native<R: RngCore>(
             meta_statements
                 .add_witness_equality(EqualWitnesses(BTreeSet::from([(0, y_index), (3, 0)])));
 
-            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X] =
+            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X_1] =
                 RdfValue::ObjectRef(ObjectId::BlankNode("d0".into()));
-            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_Y] =
+            doc[DEVICE_BINDING_KEY][DEVICE_BINDING_KEY_X_2] =
                 RdfValue::ObjectRef(ObjectId::BlankNode("d1".into()));
             deanon_map.insert(
                 NamedOrBlankNode::BlankNode(BlankNode::new_unchecked("d0")),

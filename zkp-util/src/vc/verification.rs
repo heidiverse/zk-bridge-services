@@ -35,7 +35,10 @@ use std::collections::{BTreeSet, HashMap};
 
 use crate::{
     constants::{CHALLENGE_LABEL, MERLIN_TRANSCRIPT_LABEL},
-    device_binding::{from_g1_to_arkg1, DEVICE_BINDING_KEY_X, DEVICE_BINDING_KEY_Y},
+    device_binding::{
+        from_g1_to_arkg1, DEVICE_BINDING_KEY_X, DEVICE_BINDING_KEY_X_1, DEVICE_BINDING_KEY_X_2,
+        DEVICE_BINDING_KEY_Y,
+    },
     vc::{index::index_of_vp, presentation::VerifiablePresentationNative},
 };
 
@@ -325,7 +328,7 @@ pub fn verify_native<R: RngCore>(
         let (x_index, graph_idx) = {
             if let Some(idx) = index_of_vp(
                 &presentation.proof.dataset(),
-                &NamedNode::new_unchecked(DEVICE_BINDING_KEY_X),
+                &NamedNode::new_unchecked(DEVICE_BINDING_KEY_X_1),
                 0,
             ) {
                 (idx + 1, 0)
@@ -333,7 +336,7 @@ pub fn verify_native<R: RngCore>(
                 (
                     index_of_vp(
                         &presentation.proof.dataset(),
-                        &NamedNode::new_unchecked(DEVICE_BINDING_KEY_X),
+                        &NamedNode::new_unchecked(DEVICE_BINDING_KEY_X_1),
                         1,
                     )
                     .unwrap()
@@ -344,7 +347,7 @@ pub fn verify_native<R: RngCore>(
         };
         let y_index = index_of_vp(
             &presentation.proof.dataset(),
-            &NamedNode::new_unchecked(DEVICE_BINDING_KEY_Y),
+            &NamedNode::new_unchecked(DEVICE_BINDING_KEY_X_2),
             graph_idx,
         )
         .unwrap()
