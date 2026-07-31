@@ -246,12 +246,18 @@ fn device_binding_native_with_special() {
                     .unwrap();
             println!("after");
             let x1: BlsFr = from_blsfr_to_arkblsfr(&limbs[0]);
+            println!("after2");
             let x1_bytes = x1.into_bigint().to_bytes_be();
+            println!("after3");
             let x2: BlsFr = from_blsfr_to_arkblsfr(&limbs[1]);
+            println!("after4");
             let x2_bytes = x2.into_bigint().to_bytes_be();
+            println!("after5");
 
             let x_encoded = BASE64_STANDARD.encode(public_key.x.into_bigint().to_bytes_be());
+            println!("after6");
             let y_encoded = BASE64_STANDARD.encode(public_key.y.into_bigint().to_bytes_be());
+            println!("after7");
 
             (
                 x_encoded,
@@ -284,7 +290,7 @@ fn device_binding_native_with_special() {
         )
         .unwrap();
 
-        // println!("issuance done! {vc}");
+        println!("issuance done! {vc}");
 
         let requirements = vec![requirements::ProofRequirement::Required(
             DiscloseRequirement {
