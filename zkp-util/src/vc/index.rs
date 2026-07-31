@@ -24,9 +24,7 @@ use rdf_proofs::{
 };
 use rdf_util::oxrdf::{Dataset, NamedNode, Term};
 
-pub fn index_of_vc(vc: &VerifiableCredential, value: &Term) -> usize {
-    let terms = rdf_proofs::signature::transform(&vc.document).unwrap();
-
+pub fn index_of_vc(_vc: &VerifiableCredential, value: &Term, terms: &Vec<Term>) -> usize {
     terms.iter().position(|t| t == value).unwrap() + 1
 }
 

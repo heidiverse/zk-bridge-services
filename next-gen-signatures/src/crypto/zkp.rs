@@ -17,9 +17,13 @@ use serde_json::{json, Value as JsonValue};
 use static_iref::iri;
 pub use zkp_util::vc::requirements::{DiscloseRequirement, ProofRequirement};
 use zkp_util::{
-    device_binding::{DeviceBindingPresentation, SecpAffine, SecpFq, SecpFr},
+    device_binding::{
+        limbs_from_public_key, DeviceBindingPresentationNative, DeviceBindingPresentationSigma,
+        SecpAffine, SecpFq, SecpFr,
+    },
+    ecdsa_pops::PoPNativeNizk,
     vc::{
-        presentation::VerifiablePresentation,
+        presentation::{VerifiablePresentationNative, VerifiablePresentationSigma},
         requirements::{DeviceBindingRequirement, DeviceBindingVerificationParams},
         VerifiableCredential,
     },
@@ -145,6 +149,8 @@ pub async fn issue<R: RngCore>(
 
     // Change bases
     let device_binding = if let Some((x, y)) = device_binding {
+        let (x_1, x_2) = limbs_from_public_key(&x);
+
         let x = SecpFq::from(BigUint::from_bytes_be(&BASE64_STANDARD.decode(x)?));
         let y = SecpFq::from(BigUint::from_bytes_be(&BASE64_STANDARD.decode(y)?));
 
@@ -154,7 +160,7 @@ pub async fn issue<R: RngCore>(
         let x = BASE64_STANDARD.encode(x.into_bigint().to_bytes_be());
         let y = BASE64_STANDARD.encode(y.into_bigint().to_bytes_be());
 
-        Some((x, y))
+        Some((x, y, x_1, x_2))
     } else {
         None
     };
@@ -333,14 +339,14 @@ pub fn verify<R: RngCore>(
         let device_binding = if let Some(db) = json.get("device_binding") {
             let bytes = BASE64_URL_SAFE_NO_PAD
                 .decode(db.as_str().context("Invalid device_binding found!")?)?;
-            Some(DeviceBindingPresentation::deserialize_compressed(
+            Some(DeviceBindingPresentationSigma::deserialize_compressed(
                 Cursor::new(bytes),
             )?)
         } else {
             None
         };
 
-        VerifiablePresentation {
+        VerifiablePresentationSigma {
             proof,
             device_binding,
         }
@@ -359,6 +365,150 @@ pub fn verify<R: RngCore>(
     };
 
     zkp_util::vc::verification::verify(
+        rng,
+        presentation,
+        requirements,
+        device_binding,
+        verifying_keys,
+        issuer_pk,
+        issuer_id,
+        issuer_key_id,
+        1,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn present_native<R: RngCore>(
+    rng: &mut R,
+    vc: String,
+    requirements: &Vec<ProofRequirement>,
+    device_binding: Option<DBRequirement>,
+    proving_keys: &HashMap<String, String>,
+    issuer_pk: &str,
+    issuer_id: &str,
+    issuer_key_id: &str,
+    setup: Option<PoPNativeNizk>,
+) -> anyhow::Result<String> {
+    let vc = {
+        let json = serde_json::from_str::<JsonValue>(&String::from_utf8(
+            BASE64_URL_SAFE_NO_PAD.decode(&vc)?,
+        )?)?;
+
+        let document = rdf_util::from_str(String::from_utf8(
+            BASE64_URL_SAFE_NO_PAD.decode(json["document"].as_str().unwrap())?,
+        )?)?;
+
+        let proof = rdf_util::from_str(String::from_utf8(
+            BASE64_URL_SAFE_NO_PAD.decode(json["proof"].as_str().unwrap())?,
+        )?)?;
+
+        VerifiableCredential {
+            document: document.to_graph(None),
+            proof: proof.to_graph(None),
+        }
+    };
+
+    let device_binding = if let Some(db) = device_binding {
+        let public_key = deserialize_public_key_uncompressed(&db.public_key)?;
+        let message = SecpFr::from(BigUint::from_bytes_be(&db.message));
+        let message_signature = deserialize_signature(&db.message_signature)?;
+
+        let valid = message_signature.verify_prehashed(message, public_key);
+        assert!(valid, "invalid sig");
+
+        Some(DeviceBindingRequirement {
+            public_key,
+            message,
+            message_signature,
+            comm_key_secp_label: db.comm_key_secp_label,
+            comm_key_tom_label: db.comm_key_tom_label,
+            comm_key_bls_label: db.comm_key_bls_label,
+            bpp_setup_label: db.bpp_setup_label,
+        })
+    } else {
+        None
+    };
+
+    let vp = zkp_util::vc::presentation::present_native(
+        rng,
+        vc,
+        requirements,
+        device_binding,
+        proving_keys,
+        issuer_pk,
+        issuer_id,
+        issuer_key_id,
+        setup,
+    )?;
+
+    let db = if let Some(db) = vp.device_binding {
+        let bytes = db.serialize();
+        println!("------> {}", bytes.len());
+        Some(BASE64_URL_SAFE_NO_PAD.encode(bytes))
+    } else {
+        None
+    };
+    let token = BASE64_URL_SAFE_NO_PAD.encode(
+        json!({
+            "proof": BASE64_URL_SAFE_NO_PAD.encode(vp.proof.dataset().to_string()),
+            "device_binding": db
+        })
+        .to_string(),
+    );
+
+    Ok(token)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn verify_native<R: RngCore>(
+    rng: &mut R,
+    presentation: String,
+    requirements: &Vec<ProofRequirement>,
+    device_binding: Option<DBVerificationParams>,
+    verifying_keys: &HashMap<String, String>,
+    issuer_pk: &str,
+    issuer_id: &str,
+    issuer_key_id: &str,
+) -> anyhow::Result<JsonValue> {
+    let presentation = {
+        let json = serde_json::from_str::<JsonValue>(&String::from_utf8(
+            BASE64_URL_SAFE_NO_PAD.decode(presentation)?,
+        )?)?;
+
+        let proof = rdf_util::MultiGraph::from_str(&String::from_utf8(
+            BASE64_URL_SAFE_NO_PAD
+                .decode(json["proof"].as_str().context("No proof value found!")?)?,
+        )?)?;
+
+        let device_binding = if let Some(db) = json.get("device_binding") {
+            let bytes = BASE64_URL_SAFE_NO_PAD
+                .decode(db.as_str().context("Invalid device_binding found!")?)?;
+            Some(DeviceBindingPresentationNative::deserialize(Cursor::new(
+                bytes,
+            )))
+        } else {
+            None
+        };
+
+        VerifiablePresentationNative {
+            proof,
+            device_binding,
+        }
+    };
+
+    let device_binding = if let Some(db) = device_binding {
+        Some(DeviceBindingVerificationParams {
+            message: SecpFr::from(BigUint::from_bytes_be(&db.message)),
+            comm_key_secp_label: db.comm_key_secp_label,
+            comm_key_tom_label: db.comm_key_tom_label,
+            comm_key_bls_label: db.comm_key_bls_label,
+            bpp_setup_label: db.bpp_setup_label,
+        })
+    } else {
+        None
+    };
+
+    zkp_util::vc::verification::verify_native(
         rng,
         presentation,
         requirements,

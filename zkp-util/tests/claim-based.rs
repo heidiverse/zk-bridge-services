@@ -32,6 +32,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     str::FromStr,
 };
+use zkp_util::device_binding::limbs_from_public_key;
 use zkp_util::{
     device_binding::{BlsFr, SecpFr},
     vc::{
@@ -71,16 +72,14 @@ fn claim_based() {
     let public_key = (SECP_GEN * secret_key).into_affine();
 
     let db = {
-        let x: BlsFr = from_base_field_to_scalar_field::<Fq, BlsFr>(public_key.x().unwrap());
-        let y: BlsFr = from_base_field_to_scalar_field::<Fq, BlsFr>(public_key.y().unwrap());
+        let x_bytes = public_key.x.into_bigint().to_bytes_be();
+        let y_bytes = public_key.y.into_bigint().to_bytes_be();
 
-        let x_bytes = x.into_bigint().to_bytes_be();
-        let y_bytes = y.into_bigint().to_bytes_be();
+        let x_encoded = BASE64_STANDARD.encode(x_bytes);
+        let y_encoded = BASE64_STANDARD.encode(y_bytes);
+        let (x_1, x_2) = limbs_from_public_key(&x_encoded);
 
-        (
-            BASE64_STANDARD.encode(x_bytes),
-            BASE64_STANDARD.encode(y_bytes),
-        )
+        (x_encoded, y_encoded, x_1, x_2)
     };
 
     // This is done on the issuer side
@@ -125,7 +124,7 @@ fn claim_based() {
         )
         .unwrap();
 
-        println!("issuance done! {vc}");
+        // println!("issuance done! {vc}");
         vc
     };
 
@@ -171,7 +170,7 @@ fn claim_based() {
         )
         .unwrap();
 
-        println!("issuance done! {vc}");
+        // println!("issuance done! {vc}");
         vc
     };
 

@@ -32,6 +32,9 @@ pub mod device_binding;
 pub mod keypair;
 pub mod vc;
 
+pub use ecdsa_pops;
+pub use rok;
+
 pub const SECP_GEN: SecpAffine = SecpAffine::new_unchecked(G_GENERATOR_X, G_GENERATOR_Y);
 
 const WITNESS_BIT_SIZE: usize = 64;

@@ -82,7 +82,7 @@ fn selective_disclosure() {
     )
     .unwrap();
 
-    println!("issuance done! {vc}");
+    // println!("issuance done! {vc}");
 
     let requirements = vec![ProofRequirement::Required(DiscloseRequirement {
         key: "https://schema.org/name".into(),
