@@ -3145,14 +3145,14 @@ dependencies = [
  "openssl",
  "paste",
  "rand_core",
- "rdf-util 0.1.0 (git+https://github.com/heidiverse/heidi-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
+ "rdf-util 0.1.0 (git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
  "rocket",
  "schnorr_pok 0.20.0",
  "serde",
  "serde_json",
  "static-iref",
  "tokio",
- "zkp-util 0.1.0 (git+https://github.com/heidiverse/heidi-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
+ "zkp-util 0.1.0 (git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
 ]
 
 [[package]]
@@ -4005,7 +4005,7 @@ dependencies = [
 [[package]]
 name = "rdf-util"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/heidi-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e#35713143198d1ffb1ccbb6a906f800d728b1967e"
+source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e#35713143198d1ffb1ccbb6a906f800d728b1967e"
 dependencies = [
  "anyhow",
  "oxrdf",
@@ -6211,7 +6211,7 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/heidi-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e#35713143198d1ffb1ccbb6a906f800d728b1967e"
+source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e#35713143198d1ffb1ccbb6a906f800d728b1967e"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
@@ -6236,7 +6236,7 @@ dependencies = [
  "proof_system",
  "rand_core",
  "rdf-proofs 0.11.0 (git+https://github.com/UbiqueInnovation/rdf-proofs?rev=279786a5ae2b32e058f7ccda014d8703b4c31f4f)",
- "rdf-util 0.1.0 (git+https://github.com/heidiverse/heidi-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
+ "rdf-util 0.1.0 (git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
  "rok",
  "serde",
  "serde_json",
