@@ -17,6 +17,7 @@ fips204 = ["dep:fips204"]
 rocket = ["dep:rocket"]
 zkp = [
     "dep:ark-std",
+    "dep:ark-ec",
     "dep:ark-ff",
     "dep:ark-serialize",
     "dep:chrono",
@@ -45,13 +46,13 @@ json-ld = { version = "0.21.1", optional = true }
 num-bigint = { workspace = true }
 paste = "1.0.15"
 rand_core = { workspace = true }
-rdf-util = { path = "../rdf-util", optional = true }
+rdf-util = { git = "https://github.com/heidiverse/heidi-sdk.git", rev = "35713143198d1ffb1ccbb6a906f800d728b1967e", optional = true }
 rocket = { workspace = true, optional = true }
 schnorr_pok = { version = "0.20.0", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 static-iref = { version = "3.0.0", optional = true }
-zkp-util = { path = "../zkp-util", optional = true }
+zkp-util = { git = "https://github.com/heidiverse/heidi-sdk.git", rev = "35713143198d1ffb1ccbb6a906f800d728b1967e", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.44.1", features = ["full"] }

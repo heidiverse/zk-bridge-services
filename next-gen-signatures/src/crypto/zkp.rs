@@ -3,10 +3,7 @@ use std::{collections::HashMap, fmt::Write, io::Cursor, str::FromStr};
 use anyhow::Context;
 use ark_ff::{BigInteger, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use base64::{
-    prelude::{BASE64_STANDARD, BASE64_URL_SAFE_NO_PAD},
-    Engine,
-};
+use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use chrono::DateTime;
 use json_ld::{rdf_types::generator, syntax::Parse, JsonLdProcessor, RemoteDocument};
 use num_bigint::BigUint;
@@ -18,7 +15,7 @@ use static_iref::iri;
 pub use zkp_util::vc::requirements::{DiscloseRequirement, ProofRequirement};
 use zkp_util::{
     device_binding::{
-        limbs_from_public_key, DeviceBindingPresentationNative, DeviceBindingPresentationSigma,
+        limbs_from_coordinate, DeviceBindingPresentationNative, DeviceBindingPresentationSigma,
         SecpAffine, SecpFq, SecpFr,
     },
     ecdsa_pops::PoPNativeNizk,
@@ -147,20 +144,12 @@ pub async fn issue<R: RngCore>(
     let created_date = created_date.map(DateTime::from_str).transpose()?;
     let expiration_date = expiration_date.map(DateTime::from_str).transpose()?;
 
-    // Change bases
+    // Store each P-256 coordinate as field-safe limbs.
     let device_binding = if let Some((x, y)) = device_binding {
-        let (x_1, x_2) = limbs_from_public_key(&x);
+        let (x_1, x_2) = limbs_from_coordinate(&x)?;
+        let (y_1, y_2) = limbs_from_coordinate(&y)?;
 
-        let x = SecpFq::from(BigUint::from_bytes_be(&BASE64_STANDARD.decode(x)?));
-        let y = SecpFq::from(BigUint::from_bytes_be(&BASE64_STANDARD.decode(y)?));
-
-        let x = zkp_util::device_binding::change_field(&x);
-        let y = zkp_util::device_binding::change_field(&y);
-
-        let x = BASE64_STANDARD.encode(x.into_bigint().to_bytes_be());
-        let y = BASE64_STANDARD.encode(y.into_bigint().to_bytes_be());
-
-        Some((x, y, x_1, x_2))
+        Some((x_1, x_2, y_1, y_2))
     } else {
         None
     };
