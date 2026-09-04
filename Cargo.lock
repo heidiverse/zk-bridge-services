@@ -3909,7 +3909,7 @@ dependencies = [
 [[package]]
 name = "rdf-proofs"
 version = "0.11.0"
-source = "git+https://github.com/UbiqueInnovation/rdf-proofs?branch=main#866491c18993937f1fe250ec91be295efa801217"
+source = "git+https://github.com/UbiqueInnovation/rdf-proofs?rev=279786a5ae2b32e058f7ccda014d8703b4c31f4f#279786a5ae2b32e058f7ccda014d8703b4c31f4f"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -3960,6 +3960,7 @@ dependencies = [
 [[package]]
 name = "rdf-util"
 version = "0.1.0"
+source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=b4b348ab14dfebb68c177a28481d9ecb2ef12fcd#b4b348ab14dfebb68c177a28481d9ecb2ef12fcd"
 dependencies = [
  "anyhow",
  "oxrdf",
@@ -6132,6 +6133,7 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
+source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=b4b348ab14dfebb68c177a28481d9ecb2ef12fcd#b4b348ab14dfebb68c177a28481d9ecb2ef12fcd"
 dependencies = [
  "anyhow",
  "ark-bls12-381",

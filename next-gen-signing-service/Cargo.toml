@@ -16,4 +16,4 @@ serde_urlencoded = "0.7.1"
 ark-ec = { workspace = true }
 ark-ff = { workspace = true }
 ark-std = { workspace = true }
-zkp-util = { path = "../zkp-util" }
+zkp-util = { git = "https://github.com/KapunSDK/kapun-sdk.git", rev = "b4b348ab14dfebb68c177a28481d9ecb2ef12fcd" }

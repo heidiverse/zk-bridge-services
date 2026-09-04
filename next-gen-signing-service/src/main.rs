@@ -25,10 +25,6 @@ pub mod routes;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[cfg(target_arch = "x86_64")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __rust_probestack() {}
-
 #[get("/")]
 fn index() -> String {
     format!("SPRIND Signing Service v{VERSION}")
@@ -38,6 +34,17 @@ fn index() -> String {
 fn rocket() -> _ {
     rocket::build()
         .mount("/", routes![index])
+        .mount(
+            "/v1",
+            routes![
+                routes::protocol::capabilities,
+                routes::protocol::health,
+                routes::protocol::resolve,
+                routes::protocol::create,
+                routes::protocol::delete,
+                routes::protocol::execute,
+            ],
+        )
         .mount(
             "/fips204/44",
             routes![
@@ -97,6 +104,7 @@ mod test {
     use crate::{
         models::{
             common::KeyPair,
+            protocol::{KeyRef, OperationResponse},
             zkp::{CircuitKeys, VerifiableCredential, VerifiablePresentation},
         },
         VERSION,
@@ -451,5 +459,95 @@ mod test {
         let disclosed = response.into_json::<Value>().unwrap();
 
         assert_eq!(disclosed["http://schema.org/name"], "John Doe");
+    }
+
+    #[test]
+    fn test_roundtrip_protocol_bbs() {
+        let client = Client::tracked(rocket()).unwrap();
+        let response = client
+            .post("/v1/keys")
+            .body(
+                json!({
+                    "keyId": "protocol-bbs-test",
+                    "algorithm": "BBS",
+                })
+                .to_string(),
+            )
+            .header(Header::new("Content-Type", "application/json"))
+            .dispatch();
+        assert_eq!(response.status(), Status::Created);
+        let key = response.into_json::<KeyRef>().unwrap();
+        assert_eq!(key.algorithm, "BBS");
+        assert_eq!(key.uri, "next-gen://protocol-bbs-test");
+
+        let response = client
+            .post("/v1/operations")
+            .body(
+                json!({
+                    "operation": "w3c.bbs-data-integrity-credential-issuance",
+                    "keyUri": key.uri,
+                    "input": {
+                        "algorithm": "BBS",
+                        "claims": {
+                            "@type": "http://schema.org/Person",
+                            "@id": "did:example:alice",
+                            "http://schema.org/name": "Alice",
+                        },
+                        "issuerId": "did:example:issuer",
+                        "issuerKeyId": "did:example:issuer#key-1",
+                        "credentialType": "https://example.org/ExampleCredential",
+                    },
+                })
+                .to_string(),
+            )
+            .header(Header::new("Content-Type", "application/json"))
+            .dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        let response = response.into_json::<OperationResponse>().unwrap();
+        assert_eq!(response.status, "COMPLETED");
+        assert!(!response.result.unwrap()["credential"]
+            .as_str()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn test_protocol_bbs_presentation_setup_is_keyless() {
+        let client = Client::tracked(rocket()).unwrap();
+        let response = client.get("/v1/capabilities").dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        let capabilities = response.into_json::<Value>().unwrap();
+        assert!(capabilities["supportedOperations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|operation| operation == "w3c.bbs-data-integrity-presentation-setup"));
+        assert!(capabilities["keylessOperations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|operation| operation == "w3c.bbs-data-integrity-presentation-setup"));
+
+        let response = client
+            .post("/v1/operations")
+            .body(
+                json!({
+                    "operation": "w3c.bbs-data-integrity-presentation-setup",
+                    "input": {
+                        "requirements": [
+                            {"type": "required", "key": "http://schema.org/name"}
+                        ]
+                    },
+                })
+                .to_string(),
+            )
+            .header(Header::new("Content-Type", "application/json"))
+            .dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        let response = response.into_json::<OperationResponse>().unwrap();
+        assert_eq!(response.status, "COMPLETED");
+        let result = response.result.unwrap();
+        assert!(result["provingKeys"].is_object());
+        assert!(result["verifyingKeys"].is_object());
     }
 }

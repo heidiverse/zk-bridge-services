@@ -19,4 +19,5 @@ under the License.
  */
 
 pub mod common;
+pub mod protocol;
 pub mod zkp;
