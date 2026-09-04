@@ -3145,14 +3145,14 @@ dependencies = [
  "openssl",
  "paste",
  "rand_core",
- "rdf-util 0.1.0 (git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
+ "rdf-util",
  "rocket",
  "schnorr_pok 0.20.0",
  "serde",
  "serde_json",
  "static-iref",
  "tokio",
- "zkp-util 0.1.0 (git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
+ "zkp-util",
 ]
 
 [[package]]
@@ -3169,7 +3169,7 @@ dependencies = [
  "rocket-errors",
  "serde_json",
  "serde_urlencoded",
- "zkp-util 0.1.0",
+ "zkp-util",
 ]
 
 [[package]]
@@ -3909,39 +3909,6 @@ dependencies = [
 [[package]]
 name = "rdf-proofs"
 version = "0.11.0"
-source = "git+https://github.com/UbiqueInnovation/rdf-proofs?branch=main#866491c18993937f1fe250ec91be295efa801217"
-dependencies = [
- "ark-bls12-381",
- "ark-ec",
- "ark-ff",
- "ark-serialize",
- "ark-std",
- "base64",
- "bbs_plus 0.23.0",
- "blake2",
- "chrono",
- "ciborium",
- "dock_crypto_utils 0.21.0",
- "hex",
- "legogroth16",
- "multibase",
- "num-bigint 0.4.8",
- "oxiri",
- "oxrdf",
- "oxsdatatypes",
- "oxttl",
- "proof_system",
- "rdf-canon",
- "regex",
- "serde",
- "serde_with 3.21.0",
- "sha2",
- "unsigned-varint",
-]
-
-[[package]]
-name = "rdf-proofs"
-version = "0.11.0"
 source = "git+https://github.com/UbiqueInnovation/rdf-proofs?rev=279786a5ae2b32e058f7ccda014d8703b4c31f4f#279786a5ae2b32e058f7ccda014d8703b4c31f4f"
 dependencies = [
  "ark-bls12-381",
@@ -3988,18 +3955,6 @@ dependencies = [
  "slab",
  "static-iref",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "rdf-util"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "oxrdf",
- "oxttl",
- "rdf-canon",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -6178,39 +6133,6 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
-dependencies = [
- "anyhow",
- "ark-bls12-381",
- "ark-ec",
- "ark-ff",
- "ark-secp256r1",
- "ark-serialize",
- "ark-std",
- "base64",
- "bbs_plus 0.24.0",
- "blake2",
- "bulletproofs_plus_plus 0.8.0",
- "chrono",
- "ciborium",
- "dock_crypto_utils 0.22.0",
- "ecdsa_pops",
- "equality_across_groups 0.1.0",
- "kvac 0.7.0",
- "legogroth16",
- "multibase",
- "num-bigint 0.4.8",
- "proof_system",
- "rand_core",
- "rdf-proofs 0.11.0 (git+https://github.com/UbiqueInnovation/rdf-proofs?branch=main)",
- "rdf-util 0.1.0",
- "rok",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "zkp-util"
-version = "0.1.0"
 source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e#35713143198d1ffb1ccbb6a906f800d728b1967e"
 dependencies = [
  "anyhow",
@@ -6235,8 +6157,8 @@ dependencies = [
  "num-bigint 0.4.8",
  "proof_system",
  "rand_core",
- "rdf-proofs 0.11.0 (git+https://github.com/UbiqueInnovation/rdf-proofs?rev=279786a5ae2b32e058f7ccda014d8703b4c31f4f)",
- "rdf-util 0.1.0 (git+https://github.com/KapunSDK/kapun-sdk.git?rev=35713143198d1ffb1ccbb6a906f800d728b1967e)",
+ "rdf-proofs",
+ "rdf-util",
  "rok",
  "serde",
  "serde_json",

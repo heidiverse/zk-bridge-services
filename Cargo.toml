@@ -3,14 +3,10 @@ resolver = "2"
 members = [
     "next-gen-signatures",
     "next-gen-signing-service",
-    "rdf-util",
-    "zkp-util",
 ]
 default-members = [
     "next-gen-signatures",
     "next-gen-signing-service",
-    "rdf-util",
-    "zkp-util",
 ]
 
 [workspace.dependencies]
