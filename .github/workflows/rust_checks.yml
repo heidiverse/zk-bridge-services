@@ -8,8 +8,13 @@ on:
 jobs:
   check-all:
     runs-on: ubuntu-latest
+    env:
+      RUST_MIN_STACK: "67108864"
     steps:
       - uses: actions/checkout@v4
-      - uses: UbiqueInnovation/action-systems-rust-clippy@v1.0.0
-      - uses: UbiqueInnovation/action-systems-rust-format@v1.0.0
-      - uses: UbiqueInnovation/action-systems-rust-test@v1.0.0
+      - name: Check clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Run tests
+        run: cargo test --workspace --all-targets --all-features
