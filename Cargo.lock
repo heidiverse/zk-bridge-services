@@ -2083,7 +2083,7 @@ dependencies = [
 [[package]]
 name = "halo2curves"
 version = "0.8.0"
-source = "git+https://github.com/heidiverse/signature-proof.git#d710da709dc6ad79e5d9a0b43653f1a7ab1083c9"
+source = "git+https://github.com/zaverucha/signature-proof#f040bd34004c17fa475cb03e481e94101a98e886"
 dependencies = [
  "digest",
  "ff",
@@ -2106,7 +2106,7 @@ dependencies = [
 [[package]]
 name = "halo2derive"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/signature-proof.git#d710da709dc6ad79e5d9a0b43653f1a7ab1083c9"
+source = "git+https://github.com/zaverucha/signature-proof#f040bd34004c17fa475cb03e481e94101a98e886"
 dependencies = [
  "num-bigint 0.4.8",
  "num-integer",
@@ -4109,7 +4109,7 @@ dependencies = [
 [[package]]
 name = "rdf-util"
 version = "0.1.0"
-source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=4d379c1#4d379c1395e7f67e6a908614da536acd52e84eb3"
+source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=3aff1284324fc4322cc593de560fb27915adefa5#3aff1284324fc4322cc593de560fb27915adefa5"
 dependencies = [
  "anyhow",
  "oxrdf",
@@ -4401,9 +4401,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.44"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6725596c3f2c3a0aef021139e145d4eafe314a6623e4680ca83852b2c67ab2ba"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "log",
  "once_cell",
@@ -6274,7 +6274,7 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
-source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=4d379c1#4d379c1395e7f67e6a908614da536acd52e84eb3"
+source = "git+https://github.com/KapunSDK/kapun-sdk.git?rev=3aff1284324fc4322cc593de560fb27915adefa5#3aff1284324fc4322cc593de560fb27915adefa5"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
