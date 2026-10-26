@@ -40,3 +40,11 @@ serde_json = { version = "1.0.132" }
 # [patch."https://github.com/zaverucha/signature-proof"]
 # # patches signature-proof to not enable pasta curves
 # halo2curves = { git = "https://github.com/heidiverse/signature-proof.git" }
+
+# HPI's workspace patch isn't inherited by downstream consumers.
+[patch.crates-io]
+midnight-circuits = { git = "https://github.com/midnightntwrk/midnight-zk", branch = "main" }
+midnight-curves = { git = "https://github.com/midnightntwrk/midnight-zk", branch = "main" }
+midnight-proofs = { git = "https://github.com/midnightntwrk/midnight-zk", branch = "main" }
+midnight-zk-stdlib = { git = "https://github.com/midnightntwrk/midnight-zk", branch = "main" }
+ark-secp256r1 = { git = "https://github.com/arkworks-rs/curves", rev = "e2d16a27" }
