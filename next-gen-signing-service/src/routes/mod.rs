@@ -21,5 +21,6 @@ under the License.
 pub mod bbs;
 pub mod bbs_plus;
 pub mod fips204;
+pub mod grants;
 pub mod protocol;
 pub mod zkp;

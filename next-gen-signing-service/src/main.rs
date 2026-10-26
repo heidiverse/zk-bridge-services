@@ -52,6 +52,9 @@ fn rocket() -> _ {
                 routes::protocol::create,
                 routes::protocol::delete,
                 routes::protocol::execute,
+                routes::grants::list,
+                routes::grants::scopes,
+                routes::grants::replace,
             ],
         )
         .mount(
@@ -518,6 +521,65 @@ mod test {
             .as_str()
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn test_protocol_grants_roundtrip() {
+        let client = Client::tracked(rocket()).unwrap();
+        let scope = "grant-test-scope";
+
+        let response = client
+            .put("/v1/keys/grants")
+            .body(
+                json!({
+                    "scope": scope,
+                    "grants": [{
+                        "client": "issuer",
+                        "purposes": ["signing"],
+                    }],
+                })
+                .to_string(),
+            )
+            .header(Header::new("Content-Type", "application/json"))
+            .dispatch();
+        assert_eq!(response.status(), Status::NoContent);
+
+        let response = client
+            .get(format!("/v1/keys/grants?scope={scope}"))
+            .dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        let grants = response.into_json::<Vec<Value>>().unwrap();
+        assert_eq!(grants[0]["client"], "issuer");
+        assert_eq!(grants[0]["purposes"][0], "signing");
+
+        let response = client
+            .put("/v1/keys/grants")
+            .body(
+                json!({
+                    "scope": scope,
+                    "grants": [{
+                        "client": "platform",
+                        "purposes": ["key-management"],
+                    }],
+                })
+                .to_string(),
+            )
+            .header(Header::new("Content-Type", "application/json"))
+            .dispatch();
+        assert_eq!(response.status(), Status::NoContent);
+
+        let response = client
+            .get(format!("/v1/keys/grants?scope={scope}"))
+            .dispatch();
+        let grants = response.into_json::<Vec<Value>>().unwrap();
+        assert_eq!(grants.len(), 1);
+        assert_eq!(grants[0]["client"], "platform");
+        assert_eq!(grants[0]["purposes"][0], "key-management");
+
+        let response = client.get("/v1/keys/grants/scopes").dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        let scopes = response.into_json::<Vec<String>>().unwrap();
+        assert!(scopes.iter().any(|stored_scope| stored_scope == scope));
     }
 
     #[test]

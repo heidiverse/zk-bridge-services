@@ -20,6 +20,7 @@ under the License.
 
 use rocket::serde;
 use serde_json::Value;
+use std::collections::BTreeSet;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(crate = "rocket::serde", rename_all = "camelCase")]
@@ -27,6 +28,30 @@ pub struct CreateKeyRequest {
     pub key_id: String,
     pub algorithm: String,
     pub namespace: Option<String>,
+}
+
+#[derive(Debug, Clone, Eq, Ord, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[serde(crate = "rocket::serde", rename_all = "kebab-case")]
+pub enum SigningPurpose {
+    KeyManagement,
+    Signing,
+    Operations,
+    Decrypt,
+    Read,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(crate = "rocket::serde", rename_all = "camelCase")]
+pub struct GrantRequest {
+    pub client: String,
+    pub purposes: BTreeSet<SigningPurpose>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(crate = "rocket::serde", rename_all = "camelCase")]
+pub struct GrantsRequest {
+    pub scope: String,
+    pub grants: Vec<GrantRequest>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
