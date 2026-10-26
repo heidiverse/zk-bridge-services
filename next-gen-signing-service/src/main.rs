@@ -25,6 +25,15 @@ pub mod routes;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[cfg(target_arch = "x86_64")]
+#[unsafe(no_mangle)]
+/// Provides the stack-probe ABI symbol required by x86_64 dependencies.
+///
+/// # Safety
+///
+/// Compiler-generated callers have no Rust-level preconditions.
+pub unsafe extern "C" fn __rust_probestack() {}
+
 #[get("/")]
 fn index() -> String {
     format!("SPRIND Signing Service v{VERSION}")
