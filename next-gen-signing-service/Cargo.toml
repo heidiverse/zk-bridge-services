@@ -4,11 +4,17 @@ version = "0.1.18"
 edition = "2021"
 
 [dependencies]
+base64 = { workspace = true }
+chrono = { workspace = true }
+ed25519-dalek = { version = "2.1.1", features = ["digest"] }
+hmac = "0.12.1"
 next-gen-signatures = { path = "../next-gen-signatures", features = ["all"] }
 paste = "1.0.15"
 rand_core = { workspace = true }
 rocket = { workspace = true }
 rocket-errors = "0.1.0"
+serde = { workspace = true }
+sha2 = "0.10.9"
 serde_json = "1.0.132"
 serde_urlencoded = "0.7.1"
 

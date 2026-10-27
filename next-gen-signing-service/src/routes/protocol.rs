@@ -23,10 +23,12 @@ use rocket::response::status::Custom;
 use rocket::serde::json::Json;
 use rocket::{delete, get, post};
 
+use crate::auth::{self, SignedBody, SignedRequest};
 use crate::models::protocol::{
     Capabilities, CreateKeyRequest, Health, KeyRef, OperationRequest, OperationResponse,
+    SigningPurpose,
 };
-use crate::routes::bbs;
+use crate::routes::{bbs, grants};
 
 const SCHEME: &str = "next-gen";
 
@@ -45,46 +47,67 @@ pub fn capabilities() -> Json<Capabilities> {
 }
 
 #[get("/health")]
-pub fn health() -> Json<Health> {
+pub fn health(_auth: SignedRequest) -> Json<Health> {
     Json(Health { healthy: true })
 }
 
 #[get("/keys?<uri>")]
-pub fn resolve(uri: String) -> Result<Json<KeyRef>, Status> {
+pub fn resolve(uri: String, auth: SignedRequest) -> Result<Json<KeyRef>, Status> {
+    if let Some(client) = auth.0.client() {
+        grants::require_any(client, &uri)?;
+    }
     bbs::resolve(uri)
 }
 
 #[post("/keys", data = "<request>")]
-pub fn create(
-    request: Json<CreateKeyRequest>,
-) -> rocket_errors::anyhow::Result<Custom<Json<KeyRef>>> {
-    bbs::create(request)
+pub fn create(request: SignedBody<CreateKeyRequest>) -> Result<Custom<Json<KeyRef>>, Status> {
+    let auth = request.auth;
+    auth::require_admin(&auth)?;
+    let created = bbs::create(Json(request.body)).map_err(|_| Status::InternalServerError)?;
+    if let Some(client) = auth.client() {
+        let uri = (created.1).0.uri.clone();
+        grants::initialise(&uri, Some(client))?;
+        grants::initialise(&grants::key_scope(&uri), Some(client))?;
+    }
+    Ok(created)
 }
 
 #[delete("/keys?<uri>")]
-pub fn delete(uri: String) -> Result<Status, Status> {
+pub fn delete(uri: String, auth: SignedRequest) -> Result<Status, Status> {
+    auth::require_admin(&auth.0)?;
+    if let Some(client) = auth.0.client() {
+        grants::require(client, &uri, SigningPurpose::KeyManagement)?;
+    }
     bbs::delete(uri)
 }
 
 #[post("/operations", data = "<request>")]
 pub async fn execute(
-    request: Json<OperationRequest>,
-) -> rocket_errors::anyhow::Result<Json<OperationResponse>> {
-    let request = request.into_inner();
+    request: SignedBody<OperationRequest>,
+) -> Result<Json<OperationResponse>, Status> {
+    let auth = request.auth;
+    let request = request.body;
     if !bbs::supports(&request.operation) {
-        return Err(std::io::Error::other(format!(
-            "Unsupported protocol operation: {}",
-            request.operation
-        ))
-        .into());
+        return Err(Status::NotImplemented);
     }
     if bbs::supports_keyless(&request.operation) {
         if request.key_uri.is_some() {
-            return Err(
-                std::io::Error::other("keyUri must be omitted for a keyless operation").into(),
-            );
+            return Err(Status::BadRequest);
         }
-        return bbs::execute_keyless(request);
+        if let Some(client) = auth.client() {
+            grants::require(
+                client,
+                &format!("op/{}", request.operation),
+                SigningPurpose::Operations,
+            )?;
+        }
+        return bbs::execute_keyless(request).map_err(|_| Status::InternalServerError);
     }
-    bbs::execute(request).await
+    let key_uri = request.key_uri.as_deref().ok_or(Status::BadRequest)?;
+    if let Some(client) = auth.client() {
+        grants::require(client, key_uri, SigningPurpose::Operations)?;
+    }
+    bbs::execute(request)
+        .await
+        .map_err(|_| Status::InternalServerError)
 }

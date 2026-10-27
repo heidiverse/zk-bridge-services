@@ -18,6 +18,7 @@ specific language governing permissions and limitations
 under the License.
  */
 
+pub mod auth;
 pub mod bbs;
 pub mod bbs_plus;
 pub mod fips204;

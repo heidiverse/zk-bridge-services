@@ -20,6 +20,7 @@ under the License.
 
 use rocket::{get, launch, routes};
 
+pub mod auth;
 pub mod models;
 pub mod routes;
 
@@ -41,7 +42,9 @@ fn index() -> String {
 
 #[launch]
 fn rocket() -> _ {
+    let auth = auth::AuthState::from_env().expect("invalid signing auth configuration");
     rocket::build()
+        .manage(auth)
         .mount("/", routes![index])
         .mount(
             "/v1",
@@ -52,6 +55,11 @@ fn rocket() -> _ {
                 routes::protocol::create,
                 routes::protocol::delete,
                 routes::protocol::execute,
+                routes::auth::open_registration,
+                routes::auth::register_public_key,
+                routes::auth::clients,
+                routes::auth::add_client,
+                routes::auth::remove_client,
                 routes::grants::list,
                 routes::grants::scopes,
                 routes::grants::replace,

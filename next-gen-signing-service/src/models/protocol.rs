@@ -40,6 +40,19 @@ pub enum SigningPurpose {
     Read,
 }
 
+impl SigningPurpose {
+    pub fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "key-management" => Some(Self::KeyManagement),
+            "signing" => Some(Self::Signing),
+            "operations" => Some(Self::Operations),
+            "decrypt" => Some(Self::Decrypt),
+            "read" => Some(Self::Read),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(crate = "rocket::serde", rename_all = "camelCase")]
 pub struct GrantRequest {
